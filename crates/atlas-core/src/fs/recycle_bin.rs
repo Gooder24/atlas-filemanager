@@ -668,4 +668,27 @@ mod tests {
         let meta = parse_trashinfo(content).unwrap();
         assert_eq!(meta.original_path, PathBuf::from("/home/user/test doc.txt"));
     }
+
+    #[ignore]
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn trash_roundtrip_through_freedesktop() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("roundtrip.txt");
+        std::fs::write(&file, b"payload").unwrap();
+        trash::delete(&file).unwrap();
+        assert!(!file.exists());
+        // Find it in the bin
+        let entries = read_recycle_bin(&SortColumn::Name, &SortDir::Asc);
+        let found = entries.iter().find(|e| e.name == "roundtrip.txt").expect("in bin");
+        let recycle_info = found.recycle_info().expect("recycle_info should be present");
+        restore(
+            found.path().to_path_buf(),
+            recycle_info.i_file.clone(),
+            recycle_info.original_path.clone(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(std::fs::read(&file).unwrap(), b"payload");
+    }
 }

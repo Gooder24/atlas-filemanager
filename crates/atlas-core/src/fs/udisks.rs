@@ -175,3 +175,14 @@ pub fn unmount(dev: &str) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn lsblk_json_parses() {
+        let _ = query_lsblk();
+    }
+}

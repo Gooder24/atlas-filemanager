@@ -758,4 +758,28 @@ mod tests {
         let preview_len = rx.recv().unwrap();
         assert_eq!(preview_len, 256);
     }
+
+    #[tokio::test]
+    async fn lists_usr_share_applications() {
+        let entries = list_dir(
+            std::path::Path::new("/usr/share/applications"),
+            true,
+            SortColumn::Name,
+            SortDir::Asc,
+            FolderOrder::Mixed,
+        ).await.unwrap();
+        assert!(!entries.is_empty(), "/usr/share/applications must have .desktop files on CachyOS");
+        assert!(entries.iter().any(|e| e.name.ends_with(".desktop")));
+    }
+
+    #[tokio::test]
+    async fn entry_for_path_classifies_symlink_as_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target.txt");
+        std::fs::write(&target, b"x").unwrap();
+        let link = dir.path().join("link.txt");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let entry = entry_for_path(&link).await.unwrap();
+        assert_eq!(entry.kind(), FileKind::Symlink);
+    }
 }

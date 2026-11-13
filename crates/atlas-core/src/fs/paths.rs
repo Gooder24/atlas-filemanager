@@ -1,8 +1,11 @@
 use std::path::{Component, Path, PathBuf};
+#[cfg(windows)]
 use std::time::{Duration, Instant};
 
 const WSL_LOCALHOST: &str = r"\\wsl.localhost\";
+#[cfg(windows)]
 const WSL_CACHE_TTL: Duration = Duration::from_secs(5);
+#[cfg(windows)]
 const WSL_READY_TTL: Duration = Duration::from_secs(30);
 
 fn wsl_tail(path: &Path) -> Option<&str> {
@@ -33,9 +36,10 @@ pub fn wsl_unc_parts(path: &Path) -> Option<(String, String)> {
 }
 
 pub fn normalize_wsl_unc_path(path: PathBuf) -> PathBuf {
-    wsl_tail(&path).map_or(path.clone(), |tail| {
-        PathBuf::from(format!("{WSL_LOCALHOST}{tail}"))
-    })
+    #[cfg(not(windows))]
+    { return path; }   // WSL only exists on Windows hosts
+    #[cfg(windows)]
+    wsl_tail(&path).map_or(path.clone(), |tail| PathBuf::from(format!("{WSL_LOCALHOST}{tail}")))
 }
 
 pub fn normalize_wsl_unc_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
@@ -68,8 +72,10 @@ fn is_user_wsl_distro(name: &str) -> bool {
     !name.to_ascii_lowercase().starts_with("docker-desktop")
 }
 
+#[cfg(windows)]
 use std::sync::{Arc, Mutex, OnceLock};
 
+#[cfg(windows)]
 static WSL_ROOT_CACHE: OnceLock<Arc<Mutex<Option<(Instant, Vec<PathBuf>, bool)>>>> =
     OnceLock::new();
 
@@ -318,6 +324,7 @@ mod tests {
         assert!(!is_recycle_bin_path(Path::new(r"C:\Users\me\Recycle.Bin")));
     }
 
+    #[cfg(windows)]
     #[test]
     fn normalizes_wsl_dollar_to_localhost() {
         assert_eq!(
@@ -345,6 +352,7 @@ mod tests {
         assert_eq!(wsl_unc_parts(Path::new(r"C:\tmp")), None);
     }
 
+    #[cfg(windows)]
     #[test]
     fn normalizes_location_paths() {
         let mut location =
