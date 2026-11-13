@@ -260,6 +260,7 @@ pub fn spawn_daemon(binary: &Path) -> anyhow::Result<Daemon> {
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000);
 
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut child = cmd.spawn().context("spawn rclone rcd")?;
     #[cfg(windows)]
     let job = match child

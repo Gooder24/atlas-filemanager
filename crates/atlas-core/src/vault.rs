@@ -31,6 +31,8 @@ pub const PREFIX: &str = ".atlas-vault-";
 pub mod live;
 #[cfg(windows)]
 pub mod mount;
+#[cfg(target_os = "linux")]
+pub mod mount_linux;
 mod mutable;
 mod names;
 const HEADER: &str = "vault.json";
@@ -93,6 +95,11 @@ pub struct Entry {
     blocks: Option<Vec<Option<String>>>,
     #[serde(default)]
     attributes: u32,
+}
+
+impl Entry {
+    pub fn modified(&self) -> u64 { self.modified }
+    pub fn attributes(&self) -> u32 { self.attributes }
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]

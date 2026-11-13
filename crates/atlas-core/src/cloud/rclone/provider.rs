@@ -684,11 +684,11 @@ impl CloudProvider for RcloneProvider {
         self.rc.unmount(&mount_point.to_string_lossy()).await
     }
 
-    async fn install_mount_support(&self, progress: ProgressSink) -> anyhow::Result<()> {
+    async fn install_mount_support(&self, _progress: ProgressSink) -> anyhow::Result<()> {
         #[cfg(windows)]
         {
             return super::windows_mount::install_winfsp(move |done, total| {
-                progress(done, total);
+                _progress(done, total);
             })
             .await;
         }

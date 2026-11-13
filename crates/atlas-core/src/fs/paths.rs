@@ -68,6 +68,7 @@ pub fn wsl_distro_name(path: &Path) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+#[allow(dead_code)]
 fn is_user_wsl_distro(name: &str) -> bool {
     !name.to_ascii_lowercase().starts_with("docker-desktop")
 }
@@ -211,6 +212,7 @@ pub fn ensure_wsl_ready(_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn parse_wsl_list_output(bytes: &[u8]) -> Vec<String> {
     let text = if bytes.len() >= 2 && bytes[1] == 0 {
         let words = bytes
@@ -229,6 +231,7 @@ fn parse_wsl_list_output(bytes: &[u8]) -> Vec<String> {
 }
 
 /// WSL only accepts `[A-Za-z0-9._-]` distro names; anything else is a message.
+#[allow(dead_code)]
 fn is_valid_wsl_distro_name(name: &str) -> bool {
     !name.is_empty()
         && name
