@@ -31,18 +31,25 @@ impl App {
             return;
         };
         let svg_path = if key == "/" {
-            theme.default_folder.clone()
+            theme
+                .fd_named(crate::freedesktop_icons::FreedesktopTheme::for_directory())
+                .or_else(|| theme.default_folder.clone())
         } else if key.is_empty() {
-            theme.default_file.clone()
+            theme
+                .fd_named(crate::freedesktop_icons::FreedesktopTheme::for_extension(""))
+                .or_else(|| theme.default_file.clone())
+        } else if let Some(name) = key.strip_prefix("__role__:") {
+            theme.fd_named(name).or_else(|| theme.default_folder.clone())
+        } else if let Some(name) = key.strip_prefix("__ext_icon__:") {
+            // FreeDesktop extension icon: e.g. `__ext_icon__:image-x-generic`
+            theme.fd_named(name)
         } else {
             theme.svg_for_ext(&key).map(std::path::Path::to_path_buf)
         };
         let Some(svg_path) = svg_path else {
             return;
         };
-
         self.icon_cache.insert(key.clone(), IconState::Loading);
-
         let icon_tx = self.icon_tx.clone();
         self.rt.spawn(async move {
             let result: Option<Arc<MultiResIcon>> =

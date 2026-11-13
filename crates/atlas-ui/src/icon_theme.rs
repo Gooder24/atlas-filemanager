@@ -98,6 +98,9 @@ pub struct IconThemeIndex {
     pub default_file: Option<PathBuf>,
     /// Fallback for directories.
     pub default_folder: Option<PathBuf>,
+    /// Present when the theme came from a FreeDesktop icon-theme directory
+    /// (`/usr/share/icons/<name>/index.theme`). `None` for VSCode themes.
+    pub fd_theme: Option<std::sync::Arc<crate::freedesktop_icons::FreedesktopTheme>>,
 }
 
 impl IconThemeIndex {
@@ -127,7 +130,17 @@ impl IconThemeIndex {
             ext_to_svg,
             default_file,
             default_folder,
+            fd_theme: None,
         })
+    }
+
+    /// Look up a FreeDesktop icon *name* (Linux only). Returns `None` on Windows
+    /// or when the current theme isn't FreeDesktop-backed.
+    pub fn fd_named(&self, name: &str) -> Option<PathBuf> {
+        self.fd_theme
+            .as_ref()
+            .and_then(|t| t.resolve(name))
+            .map(PathBuf::from)
     }
 }
 
@@ -143,6 +156,12 @@ const THEME_STEMS: &[&str] = &["dim", "deep", "dawn", "icons"];
 /// Returns the first usable theme found; Flow Icons is preferred over other
 /// themes.
 pub fn find_vscode_theme() -> Option<IconThemeIndex> {
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(fd) = crate::freedesktop_icons::load_default() {
+            return Some(from_freedesktop(fd));
+        }
+    }
     let home = dirs::home_dir()?;
     for sub in [".vscode-insiders/extensions", ".vscode/extensions"] {
         if let Some(idx) = scan_ext_dir(&home.join(sub)) {
@@ -151,7 +170,6 @@ pub fn find_vscode_theme() -> Option<IconThemeIndex> {
     }
     None
 }
-
 fn scan_ext_dir(base: &Path) -> Option<IconThemeIndex> {
     let mut best: Option<PathBuf> = None;
     for entry in std::fs::read_dir(base).ok()?.flatten() {
@@ -209,6 +227,7 @@ fn parse_vscode_theme_json(json_path: &Path, ext_dir: &Path) -> Option<IconTheme
         ext_to_svg,
         default_file,
         default_folder,
+        fd_theme: None,
     })
 }
 
@@ -236,6 +255,12 @@ pub fn icon_key(kind: &atlas_model::file_entry::FileKind, ext: Option<&str>) -> 
     }
 }
 
+/// Icon key for a specific "role" (drive, etc.). Distinct from file-type keys
+/// so it lives in a separate cache slot from `""` and `"/"`.
+pub fn role_key(role: &str) -> String {
+    format!("__role__:{}", role)
+}
+
 /// Collect the set of unique icon cache keys present in a file listing.
 pub fn collect_keys(entries: &[atlas_model::file_entry::FileEntry]) -> Vec<String> {
     use atlas_model::file_entry::FileKind;
@@ -250,4 +275,17 @@ pub fn collect_keys(entries: &[atlas_model::file_entry::FileEntry]) -> Vec<Strin
         seen.insert("/".to_string());
     }
     seen.into_iter().collect()
+}
+
+use crate::freedesktop_icons::FreedesktopTheme;
+
+/// Wrap a `FreedesktopTheme` in the `IconThemeIndex` shape so the rest of the
+/// app (icon_loader, file_icons) keeps working unchanged.
+pub fn from_freedesktop(theme: crate::freedesktop_icons::FreedesktopTheme) -> IconThemeIndex {
+    IconThemeIndex {
+        ext_to_svg: HashMap::<String, PathBuf>::new(),
+        default_file: None,
+        default_folder: None,
+        fd_theme: Some(std::sync::Arc::new(theme)),
+    }
 }

@@ -57,6 +57,7 @@ pub(crate) mod shell_menu;
 pub(crate) mod shell_thumb;
 pub mod ui;
 pub(crate) mod ui_wake;
+pub mod freedesktop_icons;
 
 use gpui::{px, size, App as GpuiApp, AppContext as _, KeyBinding, WindowBounds, WindowOptions};
 use gpui_component::{Root, ThemeRegistry, TitleBar};

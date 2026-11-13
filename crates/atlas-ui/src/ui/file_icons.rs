@@ -143,6 +143,15 @@ impl App {
     }
 
     fn file_icon_fallback(&self, kind: &FileKind, extension: Option<&str>) -> FileIcon {
+        // Try a FreeDesktop extension role icon (Linux).
+        #[cfg(target_os = "linux")]
+        if let Some(ext) = extension {
+            let role = crate::freedesktop_icons::FreedesktopTheme::for_extension(ext);
+            let key = crate::icon_theme::role_key(role);
+            if let Some(multi) = self.multi_res_icon(&key) {
+                return FileIcon::IconTexture(IconTexture::Multi(multi));
+            }
+        }
         if let Some(multi) = self.multi_res_icon_for_entry(kind, extension) {
             return FileIcon::IconTexture(IconTexture::Multi(multi));
         }
@@ -185,6 +194,31 @@ impl App {
             } else {
                 self.request_shell_type_icon(&file.path);
             }
+            return;
         }
+        #[cfg(target_os = "linux")]
+        {
+            if self.icon_theme.is_none() {
+                return;
+            }
+            // Request the generic kind icon (folder or text-x-generic) and, if
+            // the extension maps to a known FreeDesktop role, request that too.
+            let kind_key = if matches!(file.kind, FileKind::Dir) {
+                "/".to_string()
+            } else {
+                String::new()
+            };
+            self.request_icon(kind_key);
+            if let Some(ext) = file.extension.as_deref() {
+                let role = crate::freedesktop_icons::FreedesktopTheme::for_extension(ext);
+                self.request_icon(crate::icon_theme::role_key(role));
+            }
+        }
+    }
+
+    /// Icon key for a specific "role" (drive, etc.). Distinct from file-type keys
+    /// so it lives in a separate cache slot from `""` and `"/"`.
+    pub fn role_key(role: &str) -> String {
+        format!("__role__:{}", role)
     }
 }
