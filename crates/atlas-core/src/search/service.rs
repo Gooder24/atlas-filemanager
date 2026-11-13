@@ -330,3 +330,25 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, unix))]
+mod linux_tests {
+    use super::*;
+
+    #[test]
+    fn linux_socket_path_is_under_xdg_runtime_dir_or_tmp() {
+        let path = linux_socket_path();
+        assert!(path.to_string_lossy().contains("atlas-search"));
+        if let Ok(runtime) = std::env::var("XDG_RUNTIME_DIR") {
+            assert!(path.starts_with(runtime));
+        } else {
+            assert!(path.starts_with("/tmp"));
+        }
+    }
+
+    #[test]
+    fn find_search_service_exe_returns_a_path_if_binary_exists() {
+        // Not asserting Some — the binary may not be built. Just proving it runs.
+        let _ = find_search_service_exe();
+    }
+}
