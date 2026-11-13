@@ -80,14 +80,18 @@ mod tests {
     use super::*;
     #[test]
     fn trash_moves_a_real_file_and_refuses_system_roots() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("atlas-trash-test.bin");
-        std::fs::write(&file, [1u8; 64]).unwrap();
-        move_to_trash(&file).unwrap();
-        assert!(!file.exists());
+        #[cfg(windows)]
+        {
+            let dir = tempfile::tempdir().unwrap();
+            let file = dir.path().join("atlas-trash-test.bin");
+            std::fs::write(&file, [1u8; 64]).unwrap();
+            move_to_trash(&file).unwrap();
+            assert!(!file.exists());
+        }
+        // These refusals work identically on both platforms (they're string checks).
         assert!(move_to_trash(std::path::Path::new("C:\\")).is_err());
         assert!(move_to_trash(std::path::Path::new(r"C:\Windows\System32")).is_err());
         assert!(move_to_trash(std::path::Path::new(r"C:\Users")).is_err());
-        assert!(move_to_trash(&dir.path().join("missing")).is_err());
+        assert!(move_to_trash(&tempfile::tempdir().unwrap().path().join("missing")).is_err());
     }
 }

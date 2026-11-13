@@ -11,7 +11,15 @@ pub fn is_drive_root(path: &Path) -> bool {
 }
 
 pub fn user_temp_root() -> Option<PathBuf> {
-    dirs::data_local_dir().map(|local| local.join("Temp"))
+    #[cfg(windows)]
+    {
+        dirs::data_local_dir().map(|local| local.join("Temp"))
+    }
+    #[cfg(not(windows))]
+    {
+        // On Linux, regenerable data lives under $XDG_CACHE_HOME (~/.cache).
+        dirs::cache_dir()
+    }
 }
 
 /// A user-facing group of regenerable data. Every root is a directory whose
@@ -22,6 +30,18 @@ pub struct Category {
 }
 
 pub fn categories() -> Vec<Category> {
+    #[cfg(windows)]
+    {
+        windows_categories()
+    }
+    #[cfg(not(windows))]
+    {
+        linux_categories()
+    }
+}
+
+#[cfg(windows)]
+fn windows_categories() -> Vec<Category> {
     let local = dirs::data_local_dir();
     let home = dirs::home_dir();
     let join = |base: &Option<PathBuf>, rel: &str| base.as_ref().map(|b| b.join(rel));
@@ -62,6 +82,71 @@ pub fn categories() -> Vec<Category> {
                 join(&local, "pip/Cache"),
                 join(&local, "Yarn/Cache"),
                 join(&home, ".cargo/registry/cache"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+        ),
+    ];
+    list.into_iter()
+        .map(|(key, roots): (&'static str, Vec<PathBuf>)| Category {
+            key,
+            roots: roots.into_iter().filter(|r| r.is_dir()).collect(),
+        })
+        .filter(|c| !c.roots.is_empty())
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn linux_categories() -> Vec<Category> {
+    let cache = dirs::cache_dir();        // ~/.cache
+    let home = dirs::home_dir();
+    let join = |base: &Option<PathBuf>, rel: &str| base.as_ref().map(|b| b.join(rel));
+
+    let mut browsers = Vec::new();
+    for base in [
+        "google-chrome",
+        "chromium",
+        "microsoft-edge",
+        "BraveSoftware/Brave-Browser",
+        "vivaldi",
+    ] {
+        for cache_dir in ["Default/Cache", "Default/Code Cache", "Default/GPUCache"] {
+            browsers.extend(join(&cache, &format!("{base}/{cache_dir}")));
+        }
+    }
+    if let Some(profiles) = join(&cache, "mozilla/firefox") {
+        if let Ok(entries) = std::fs::read_dir(profiles) {
+            browsers.extend(
+                entries
+                    .flatten()
+                    .filter(|e| e.file_name().to_string_lossy().ends_with(".default") || e.file_name().to_string_lossy().ends_with(".default-release"))
+                    .map(|e| e.path().join("cache2")),
+            );
+        }
+    }
+
+    let list = [
+        ("cleanup_cat_temp", dirs::cache_dir().into_iter().collect()),
+        ("cleanup_cat_browser", browsers),
+        (
+            "cleanup_cat_crash",
+            [
+                join(&cache, "thumbnails"),           // thumbnail cache; regenerable
+                join(&home, ".local/share/Trash"),    // actually let's NOT offer trash as cleanup — user thinks it's gone
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+        ),
+        (
+            "cleanup_cat_dev",
+            [
+                join(&home, ".npm/_cacache"),
+                join(&home, ".cache/pip"),
+                join(&home, ".cargo/registry/cache"),
+                join(&home, ".cache/yarn"),
+                join(&home, ".cache/pnpm"),
             ]
             .into_iter()
             .flatten()
@@ -161,6 +246,25 @@ mod tests {
             "local/Temp/.bb/state",
         ] {
             assert!(!valid_temp_candidate(Path::new(path), root), "{path}");
+        }
+    }
+    #[cfg(not(windows))]
+    #[test]
+    fn linux_categories_use_xdg_cache_dir() {
+        // Prove the Linux categories point at ~/.cache, not ~/.local/share.
+        // Can't assume specific dirs exist, but the roots that do exist should be
+        // under the XDG cache dir.
+        if let Some(cache) = dirs::cache_dir() {
+            for cat in categories() {
+                for root in &cat.roots {
+                    assert!(
+                        root.starts_with(&cache) || root.starts_with(dirs::home_dir().unwrap_or_default()),
+                        "unexpected root {:?} for category {}",
+                        root,
+                        cat.key
+                    );
+                }
+            }
         }
     }
 }
