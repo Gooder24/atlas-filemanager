@@ -8,7 +8,7 @@ on:
         required: true
       edition:
         type: string
-        default: full
+        default: free
       source-url:
         type: string
         default: ''

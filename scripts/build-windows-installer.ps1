@@ -1,7 +1,10 @@
 param(
     [string]$Version = "0.1.0",
     [switch]$PerfLog,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    # Distributed builds are Free (paid features unlock by license); "full" is for local use only.
+    [ValidateSet("free", "full")]
+    [string]$Edition = "free"
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,11 +26,14 @@ See RCLONE-THIRD-PARTY-NOTICES.txt for the bundled rclone dependency notices.
 "@ | Set-Content -LiteralPath (Join-Path $installerDirectory 'SOURCE-CODE.txt') -Encoding UTF8
 
 if (-not $SkipBuild) {
-if ($PerfLog) {
-    cargo build --release --locked -p atlas -p atlas-search-service -p atlas-cloud-extension -p atlas-icon-extension --features perf-log
-} else {
-    cargo build --release --locked -p atlas -p atlas-search-service -p atlas-cloud-extension -p atlas-icon-extension
+foreach ($proc in Get-Process -Name atlas, atlas-search-service -ErrorAction SilentlyContinue) {
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 }
+$features = @()
+if ($Edition -eq "free") { $features += "free" }
+if ($PerfLog) { $features += "perf-log" }
+$featureArgs = if ($features.Count) { @("--features", ($features -join ",")) } else { @() }
+cargo build --release --locked -p atlas -p atlas-search-service -p atlas-cloud-extension -p atlas-icon-extension @featureArgs
 if ($LASTEXITCODE -ne 0) { throw "Windows build failed ($LASTEXITCODE)." }
 }
 & (Join-Path $PSScriptRoot "archive-symbols.ps1") -Version "$Version-installer"
