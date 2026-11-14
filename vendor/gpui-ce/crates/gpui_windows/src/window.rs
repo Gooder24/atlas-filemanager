@@ -1657,7 +1657,7 @@ fn dwm_set_window_composition_attribute(hwnd: HWND, backdrop_type: u32) {
     }
 }
 
-fn set_window_composition_attribute(hwnd: HWND, color: Option<Color>, state: u32) {
+pub(crate) fn set_window_composition_attribute(hwnd: HWND, color: Option<Color>, state: u32) {
     let mut version = windows::Win32::System::SystemInformation::OSVERSIONINFOW::default();
     version.dwOSVersionInfoSize = std::mem::size_of_val(&version) as u32;
     let status = unsafe { windows::Wdk::System::SystemServices::RtlGetVersion(&mut version) };
@@ -1704,6 +1704,25 @@ fn set_window_composition_attribute(hwnd: HWND, color: Option<Color>, state: u32
             };
             let _ = set_window_composition_attribute(hwnd, &mut data as *mut _ as _);
         }
+    }
+}
+
+/// Windows 11 acrylic makes the native move loop crawl (seconds of input lag),
+/// so a blurred window drops its backdrop while it is being dragged or resized.
+pub(crate) fn set_blur_during_size_move(hwnd: HWND, appearance: WindowBackgroundAppearance, moving: bool) {
+    if !matches!(appearance, WindowBackgroundAppearance::Blurred) {
+        return;
+    }
+    let mut version = windows::Win32::System::SystemInformation::OSVERSIONINFOW::default();
+    version.dwOSVersionInfoSize = std::mem::size_of_val(&version) as u32;
+    let status = unsafe { windows::Wdk::System::SystemServices::RtlGetVersion(&mut version) };
+    if !status.is_ok() || version.dwBuildNumber < 22000 {
+        return;
+    }
+    if moving {
+        set_window_composition_attribute(hwnd, None, 2);
+    } else {
+        set_window_composition_attribute(hwnd, Some((0, 0, 0, 0)), 4);
     }
 }
 

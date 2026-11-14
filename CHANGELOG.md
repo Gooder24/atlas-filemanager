@@ -5,6 +5,10 @@ Write user-facing release notes here. Release headings use
 
 ## [Unreleased]
 
+### Fixed
+
+- On Windows 11, dragging or resizing a glass window no longer lags or freezes: the blur is paused while the window moves and returns when you let go.
+
 ## [0.1.6-beta.2] - 2026-11-13
 
 ### Fixed
