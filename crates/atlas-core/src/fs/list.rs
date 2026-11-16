@@ -767,8 +767,13 @@ mod tests {
             SortColumn::Name,
             SortDir::Asc,
             FolderOrder::Mixed,
-        ).await.unwrap();
-        assert!(!entries.is_empty(), "/usr/share/applications must have .desktop files on CachyOS");
+        )
+        .await
+        .unwrap();
+        assert!(
+            !entries.is_empty(),
+            "/usr/share/applications must have .desktop files on CachyOS"
+        );
         assert!(entries.iter().any(|e| e.name.ends_with(".desktop")));
     }
 

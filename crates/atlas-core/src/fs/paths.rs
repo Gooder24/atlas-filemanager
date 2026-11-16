@@ -37,9 +37,13 @@ pub fn wsl_unc_parts(path: &Path) -> Option<(String, String)> {
 
 pub fn normalize_wsl_unc_path(path: PathBuf) -> PathBuf {
     #[cfg(not(windows))]
-    { return path; }   // WSL only exists on Windows hosts
+    {
+        return path;
+    } // WSL only exists on Windows hosts
     #[cfg(windows)]
-    wsl_tail(&path).map_or(path.clone(), |tail| PathBuf::from(format!("{WSL_LOCALHOST}{tail}")))
+    wsl_tail(&path).map_or(path.clone(), |tail| {
+        PathBuf::from(format!("{WSL_LOCALHOST}{tail}"))
+    })
 }
 
 pub fn normalize_wsl_unc_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
