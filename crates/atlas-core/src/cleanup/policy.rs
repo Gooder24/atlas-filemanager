@@ -1,6 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 /// Deliberately excludes network/device paths and ambiguous drive-relative paths.
+#[cfg(windows)]
 pub fn is_drive_root(path: &Path) -> bool {
     let value = path.as_os_str().to_string_lossy();
     let bytes = value.as_bytes();
@@ -8,6 +9,27 @@ pub fn is_drive_root(path: &Path) -> bool {
         && bytes[0].is_ascii_alphabetic()
         && bytes[1] == b':'
         && matches!(bytes[2], b'\\' | b'/')
+}
+
+/// `/` or another mount point: an absolute, normalized directory that lives on
+/// a different filesystem than its parent.
+#[cfg(not(windows))]
+pub fn is_drive_root(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|c| !matches!(c, Component::RootDir | Component::Normal(_)))
+    {
+        return false;
+    }
+    let Some(parent) = path.parent() else {
+        return path == Path::new("/");
+    };
+    match (std::fs::symlink_metadata(path), std::fs::metadata(parent)) {
+        (Ok(dir), Ok(parent)) => dir.is_dir() && dir.dev() != parent.dev(),
+        _ => false,
+    }
 }
 
 pub fn user_temp_root() -> Option<PathBuf> {
@@ -99,7 +121,7 @@ fn windows_categories() -> Vec<Category> {
 
 #[cfg(not(windows))]
 fn linux_categories() -> Vec<Category> {
-    let cache = dirs::cache_dir();        // ~/.cache
+    let cache = dirs::cache_dir(); // ~/.cache
     let home = dirs::home_dir();
     let join = |base: &Option<PathBuf>, rel: &str| base.as_ref().map(|b| b.join(rel));
 
@@ -120,7 +142,12 @@ fn linux_categories() -> Vec<Category> {
             browsers.extend(
                 entries
                     .flatten()
-                    .filter(|e| e.file_name().to_string_lossy().ends_with(".default") || e.file_name().to_string_lossy().ends_with(".default-release"))
+                    .filter(|e| {
+                        e.file_name().to_string_lossy().ends_with(".default")
+                            || e.file_name()
+                                .to_string_lossy()
+                                .ends_with(".default-release")
+                    })
                     .map(|e| e.path().join("cache2")),
             );
         }
@@ -132,8 +159,9 @@ fn linux_categories() -> Vec<Category> {
         (
             "cleanup_cat_crash",
             [
-                join(&cache, "thumbnails"),           // thumbnail cache; regenerable
-                join(&home, ".local/share/Trash"),    // actually let's NOT offer trash as cleanup — user thinks it's gone
+                // Thumbnail cache; regenerable. The Trash is deliberately not offered:
+                // its contents are user files waiting to be restored or emptied.
+                join(&cache, "thumbnails"),
             ]
             .into_iter()
             .flatten()
@@ -224,11 +252,21 @@ pub(super) fn valid_temp_candidate(path: &Path, temp: &Path) -> bool {
 mod tests {
     use super::*;
     #[test]
+    #[cfg(windows)]
     fn drive_scope_rejects_unc_relative_and_nested_paths() {
         for value in ["C:\\", "d:/"] {
             assert!(is_drive_root(Path::new(value)));
         }
         for value in ["C:", "C:\\Users", "\\\\server\\share", "\\\\?\\C:\\", "/"] {
+            assert!(!is_drive_root(Path::new(value)), "{value}");
+        }
+    }
+    #[cfg(not(windows))]
+    #[test]
+    fn mount_points_are_volume_roots() {
+        assert!(is_drive_root(Path::new("/")));
+        assert!(is_drive_root(Path::new("/proc")));
+        for value in ["/usr/bin", "relative", "/tmp/../", "C:\\"] {
             assert!(!is_drive_root(Path::new(value)), "{value}");
         }
     }
@@ -258,7 +296,8 @@ mod tests {
             for cat in categories() {
                 for root in &cat.roots {
                     assert!(
-                        root.starts_with(&cache) || root.starts_with(dirs::home_dir().unwrap_or_default()),
+                        root.starts_with(&cache)
+                            || root.starts_with(dirs::home_dir().unwrap_or_default()),
                         "unexpected root {:?} for category {}",
                         root,
                         cat.key
