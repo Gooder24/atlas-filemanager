@@ -175,10 +175,7 @@ impl Shared {
     }
 
     fn touch(&self) {
-        *self
-            .activity
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Instant::now();
+        *self.activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
     }
 }
 
@@ -207,12 +204,19 @@ impl Mounted {
             gid,
         });
         let result = (|| -> anyhow::Result<fuser::BackgroundSession> {
-            std::fs::create_dir_all(path.parent().unwrap())?;
+            let parent = path.parent().expect("mount path has a parent");
+            std::fs::create_dir_all(parent)?;
+            remove_stale_mounts(parent);
             std::fs::create_dir_all(&path)?;
+            // No AutoUnmount: it needs `allow_other`, which would expose plaintext to
+            // other users and fails unless /etc/fuse.conf sets user_allow_other.
+            // Drop unmounts; mounts orphaned by a crash are removed on the next start.
             let options = vec![
                 fuser::MountOption::FSName("atlas-private".into()),
-                fuser::MountOption::AutoUnmount,
+                fuser::MountOption::Subtype("atlas".into()),
                 fuser::MountOption::DefaultPermissions,
+                fuser::MountOption::NoDev,
+                fuser::MountOption::NoSuid,
             ];
             let fs = PrivateFs(shared.clone());
             Ok(fuser::spawn_mount2(fs, &path, &options)?)
@@ -304,6 +308,27 @@ impl Drop for Mounted {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take();
+    }
+}
+
+/// Lazily unmount mount points whose FUSE process is gone (they report ENOTCONN)
+/// and remove empty leftovers. Live mounts of other Atlas processes are untouched.
+fn remove_stale_mounts(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let stale =
+            matches!(std::fs::metadata(&path), Err(e) if e.raw_os_error() == Some(libc::ENOTCONN));
+        if stale {
+            let _ = std::process::Command::new("fusermount3")
+                .args(["-u", "-z"])
+                .arg(&path)
+                .status();
+        }
+        // Succeeds only for an empty, unmounted directory.
+        let _ = std::fs::remove_dir(&path);
     }
 }
 
@@ -467,14 +492,7 @@ impl Filesystem for PrivateFs {
         }
     }
 
-    fn flush(
-        &mut self,
-        _req: &Request,
-        _ino: u64,
-        _fh: u64,
-        _lock_owner: u64,
-        reply: ReplyEmpty,
-    ) {
+    fn flush(&mut self, _req: &Request, _ino: u64, _fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
         // Every write acknowledges only after encrypted objects and manifest are
         // synced. Nothing to do here — the ciphertext is already durable.
         reply.ok();
@@ -576,7 +594,9 @@ impl Filesystem for PrivateFs {
             reply.error(libc::ENOENT);
             return;
         };
-        let Ok(name_str) = name.to_str().ok_or_else(|| anyhow::anyhow!("vault_invalid_name"))
+        let Ok(name_str) = name
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("vault_invalid_name"))
         else {
             reply.error(libc::EINVAL);
             return;
@@ -611,7 +631,9 @@ impl Filesystem for PrivateFs {
             reply.error(libc::ENOENT);
             return;
         };
-        let Ok(name_str) = name.to_str().ok_or_else(|| anyhow::anyhow!("vault_invalid_name"))
+        let Ok(name_str) = name
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("vault_invalid_name"))
         else {
             reply.error(libc::EINVAL);
             return;
