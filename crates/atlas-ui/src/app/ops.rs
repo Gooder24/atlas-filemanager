@@ -525,15 +525,20 @@ impl App {
                 let uri_list =
                     crate::dnd::format_uri_list_with_cut(&paths, is_cut).replace('\0', "");
                 if let Ok(mut cb) = arboard::Clipboard::new() {
-                    let _ = cb.set_text(uri_list.clone());
+                    // Other file managers paste text/uri-list; editors fall back to text.
                     #[cfg(target_os = "linux")]
                     {
                         use arboard::{LinuxClipboardKind, SetExtLinux};
+                        if cb.set().file_list(&paths).is_err() {
+                            let _ = cb.set_text(uri_list.clone());
+                        }
                         let _ = cb
                             .set()
                             .clipboard(LinuxClipboardKind::Primary)
                             .text(uri_list);
                     }
+                    #[cfg(not(target_os = "linux"))]
+                    let _ = cb.set_text(uri_list);
                 }
             }
         }
