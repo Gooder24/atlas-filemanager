@@ -124,6 +124,7 @@ key -M ctrl . -m ctrl
 # archives is not implemented upstream yet). Judged from the screenshot.
 goto "$work/start"; key -k Home; key -k Down; key -k Return; sleep 1.5
 key -k Home; key -k space; sleep 1.5; shot 09-zip; key -k space
+key -M alt -k Up -m alt; sleep 1  # leave the archive: Ctrl+L edits the path text there
 log "LOOK  09-zip.png: archive.zip open, Quick Look shows \"inside zip\""
 
 # 10. Ctrl+K jumps to a deep folder (probe: a new folder lands there)
