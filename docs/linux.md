@@ -22,6 +22,9 @@ ATLAS_GIT="git+file://$PWD/../../..#branch=$(git branch --show-current)" makepkg
 
 Remove it with `sudo pacman -R atlas-git`.
 
+The release build of `atlas-ui` peaks at about 10 GB of RAM in a single `rustc`
+process, so build on a machine with 16 GB or add swap.
+
 Optional packages enable more features; Atlas works without them:
 
 | Package | Enables |
@@ -80,6 +83,12 @@ offered. Before deleting, Atlas re-checks that the file and each of its parent f
 are still the same inodes, have no other hard links and were not modified, and it never
 follows symlinks.
 
+## Clipboard
+
+Copying files puts them on the clipboard as `text/uri-list`, which other file managers
+paste. On Wayland Atlas uses the data-control protocol (sway, niri, Hyprland, KDE); where
+the compositor lacks it, Atlas falls back to the X11 clipboard through XWayland.
+
 ## Known limits
 
 - Dragging files out of Atlas works on Wayland; on X11 only dropping into Atlas works.
@@ -89,6 +98,8 @@ follows symlinks.
 
 ## Testing in a VM
 
-`scripts/arch-vm/vm.sh` boots a headless Arch Linux VM with QEMU/KVM, and
-`scripts/arch-vm/gui-test.sh` installs the package there and runs the GUI scenarios
-under Wayland (sway, headless) and X11 (Xvfb), with screenshots.
+`scripts/arch-vm/vm.sh` boots a headless Arch Linux VM with QEMU/KVM. Install the
+package there with `pacman -U`, then `scripts/arch-vm/gui-test.sh` drives Atlas under a
+headless sway session with real keyboard input (create, rename, copy, clipboard, trash
+and undo, hidden files, ZIP, Ctrl+K, restart, a 100 000-file folder, idle CPU and
+memory) and saves screenshots. `scripts/linux-smoke.sh` covers X11 under Xvfb.
