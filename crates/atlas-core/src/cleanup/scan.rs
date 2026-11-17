@@ -59,6 +59,7 @@ impl ScanJob {
             last_publish: Instant::now(),
             stored_path_bytes: 0,
             mode,
+            nested: Vec::new(),
         };
         let (queue, threads, depth) = match mode {
             ScanMode::Folder | ScanMode::FastFolder => (&SCAN_QUEUE, 1, 8),
@@ -147,6 +148,10 @@ struct Worker {
     last_publish: Instant,
     stored_path_bytes: usize,
     mode: ScanMode,
+    /// Other category roots inside the scanned one. Their files belong to their own
+    /// category (on Linux, ~/.cache holds the browser and developer caches), so a
+    /// file is never counted or offered twice.
+    nested: Vec<PathBuf>,
 }
 
 static SCAN_QUEUE: OnceLock<flume::Sender<Worker>> = OnceLock::new();
@@ -172,7 +177,7 @@ impl Worker {
                 self.finish();
                 return;
             }
-            self.snapshot.capacity = atlas_win_space::cleanup::capacity(&root);
+            self.snapshot.capacity = super::verified::capacity(&root);
             self.snapshot.fast_scan_available = root
                 .ancestors()
                 .last()
@@ -195,6 +200,11 @@ impl Worker {
                 self.finish();
                 return;
             }
+            self.nested = policy::categories()
+                .into_iter()
+                .flat_map(|c| c.roots)
+                .filter(|r| r != &temp && r.starts_with(&temp))
+                .collect();
             self.snapshot.root = temp.clone();
             self.read_root(&temp);
         } else {
@@ -371,6 +381,9 @@ impl Worker {
                 continue;
             };
             let path = entry.path();
+            if self.nested.contains(&path) {
+                continue;
+            }
             let Some(metadata) = self.metadata(&path) else {
                 continue;
             };
@@ -394,6 +407,7 @@ impl Worker {
         }
     }
 
+    #[cfg(windows)]
     fn maybe_publish(&mut self) {
         if self.last_publish.elapsed() >= Duration::from_millis(250) {
             self.publish(None);
@@ -449,6 +463,9 @@ impl Worker {
                 continue;
             };
             let path = entry.path();
+            if self.nested.contains(&path) {
+                continue;
+            }
             let Some(metadata) = self.metadata(&path) else {
                 continue;
             };
@@ -503,8 +520,8 @@ impl Worker {
             {
                 self.snapshot.limited = true;
             } else {
-                #[cfg(windows)]
-                match atlas_win_space::cleanup::inspect(path) {
+                #[cfg(any(windows, target_os = "linux"))]
+                match super::verified::inspect(path) {
                     Ok(candidate) => {
                         let path_bytes = candidate
                             .ancestors
@@ -681,6 +698,7 @@ mod tests {
             last_publish: Instant::now(),
             stored_path_bytes: 0,
             mode: ScanMode::Temporary,
+            nested: Vec::new(),
         };
         worker.read_root(fixture.path());
         worker.finish();
@@ -692,5 +710,45 @@ mod tests {
         assert_eq!(worker.snapshot.bytes, 12);
         assert_eq!(worker.snapshot.skipped, 2);
         assert_eq!(worker.snapshot.status, ScanStatus::Partial);
+    }
+
+    #[test]
+    fn nested_category_roots_are_left_to_their_own_category() {
+        let fixture = tempfile::tempdir().unwrap();
+        let browser = fixture.path().join("chromium/Default/Cache");
+        fs::create_dir_all(&browser).unwrap();
+        for path in [fixture.path().join("old.bin"), browser.join("old-entry")] {
+            fs::write(&path, b"data").unwrap();
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(SystemTime::now() - Duration::from_secs(8 * 24 * 3600))
+                .unwrap();
+        }
+        let (sender, drain) = flume::bounded(1);
+        let mut worker = Worker {
+            sender,
+            drain,
+            cancel: Arc::new(AtomicBool::new(false)),
+            paused: Arc::new(AtomicBool::new(false)),
+            snapshot: DiskSnapshot::default(),
+            rows: BinaryHeap::new(),
+            files: BinaryHeap::new(),
+            last_publish: Instant::now(),
+            stored_path_bytes: 0,
+            mode: ScanMode::Category,
+            nested: vec![browser],
+        };
+        worker.read_root(fixture.path());
+        worker.finish();
+        let offered: Vec<_> = worker
+            .snapshot
+            .reclaimable
+            .iter()
+            .map(|e| &e.path)
+            .collect();
+        assert_eq!(offered, [&fixture.path().join("old.bin")]);
+        assert_eq!(worker.snapshot.bytes, 4);
     }
 }
