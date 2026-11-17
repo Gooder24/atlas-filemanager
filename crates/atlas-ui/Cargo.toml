@@ -59,6 +59,10 @@ anyhow = "1"
 zeroize = "1"
 tracy-client = { version = "0.18.4", optional = true, default-features = false, features = ["enable", "only-localhost", "ondemand"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Offers a file copy in several formats at once on Wayland (file managers, editors).
+wl-clipboard-rs = "0.9"
+
 [target.'cfg(windows)'.dependencies]
 atlas-win-space = { path = "../atlas-win-space" }
 # Windows OLE drag-and-drop (IDataObject, IDropSource, IDropTarget, DoDragDrop).
@@ -126,7 +130,3 @@ required-features = ["ui-lab"]
 [[example]]
 name = "cleanup_diagnostic"
 required-features = ["ui-lab"]
-
-[target.'cfg(target_os = "linux")'.dependencies]
-# Offers a file copy in several formats at once on Wayland (file managers, editors).
-wl-clipboard-rs = "0.9"

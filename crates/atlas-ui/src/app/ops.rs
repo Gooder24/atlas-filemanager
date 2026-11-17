@@ -1082,45 +1082,83 @@ mod linux_clipboard {
     use std::path::PathBuf;
     use wl_clipboard_rs::copy::{MimeSource, MimeType, Options, Source};
 
-    fn source(mime: &str, text: String) -> MimeSource {
-        MimeSource {
-            source: Source::Bytes(text.into_bytes().into_boxed_slice()),
-            mime_type: MimeType::Specific(mime.to_owned()),
-        }
-    }
-
-    /// Puts copied or cut files on the Wayland clipboard in the formats other
-    /// apps read: text/uri-list (file managers), the GNOME and KDE cut markers
-    /// (Nautilus and Dolphin move instead of copy) and plain text (editors).
-    /// Returns false when there is no Wayland session with data-control.
-    pub fn offer_files(paths: &[PathBuf], is_cut: bool, text: &str) -> bool {
-        if std::env::var_os("WAYLAND_DISPLAY").is_none() {
-            return false;
-        }
+    /// The formats other apps read for copied files: text/uri-list (file
+    /// managers) and the GNOME and KDE markers that tell Nautilus and Dolphin
+    /// whether to move or copy.
+    pub(super) fn file_offers(paths: &[PathBuf], is_cut: bool) -> [(&'static str, String); 3] {
         let uris: Vec<String> = paths
             .iter()
             .map(|p| crate::dnd::path_to_file_uri(p))
             .collect();
-        let gnome = format!(
-            "{}\n{}",
-            if is_cut { "cut" } else { "copy" },
-            uris.join("\n")
-        );
-        let sources = vec![
-            source(
+        let verb = if is_cut { "cut" } else { "copy" };
+        [
+            (
                 "text/uri-list",
-                uris.iter().map(|u| format!("{u}\r\n")).collect(),
+                uris.iter().map(|u| u.clone() + "\r\n").collect(),
             ),
-            source("x-special/gnome-copied-files", gnome),
-            source(
+            (
+                "x-special/gnome-copied-files",
+                format!("{verb}\n{}", uris.join("\n")),
+            ),
+            (
                 "application/x-kde-cutselection",
                 if is_cut { "1" } else { "0" }.into(),
             ),
-            MimeSource {
-                source: Source::Bytes(text.as_bytes().into()),
-                mime_type: MimeType::Text,
-            },
-        ];
+        ]
+    }
+
+    /// Puts copied or cut files on the Wayland clipboard in those formats plus
+    /// `text` for editors. Returns false without a Wayland session that has
+    /// the data-control protocol; the caller then uses arboard's text path.
+    pub fn offer_files(paths: &[PathBuf], is_cut: bool, text: &str) -> bool {
+        if std::env::var_os("WAYLAND_DISPLAY").is_none() {
+            return false;
+        }
+        let mut sources: Vec<MimeSource> = file_offers(paths, is_cut)
+            .into_iter()
+            .map(|(mime, body)| MimeSource {
+                source: Source::Bytes(body.into_bytes().into_boxed_slice()),
+                mime_type: MimeType::Specific(mime.to_owned()),
+            })
+            .collect();
+        sources.push(MimeSource {
+            source: Source::Bytes(text.as_bytes().into()),
+            mime_type: MimeType::Text,
+        });
         Options::new().copy_multi(sources).is_ok()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::file_offers;
+        use std::path::PathBuf;
+
+        #[test]
+        fn copied_files_carry_uri_list_and_cut_markers() {
+            let paths = [
+                PathBuf::from("/home/a/My File.txt"),
+                PathBuf::from("/tmp/b#1"),
+            ];
+            let [uri_list, gnome, kde] = file_offers(&paths, true);
+            assert_eq!(
+                uri_list,
+                (
+                    "text/uri-list",
+                    "file:///home/a/My%20File.txt\r\nfile:///tmp/b%231\r\n".into()
+                )
+            );
+            assert_eq!(
+                gnome,
+                (
+                    "x-special/gnome-copied-files",
+                    "cut\nfile:///home/a/My%20File.txt\nfile:///tmp/b%231".into()
+                )
+            );
+            assert_eq!(kde, ("application/x-kde-cutselection", "1".into()));
+
+            let [_, gnome, kde] = file_offers(&paths[..1], false);
+            assert!(gnome.1.starts_with("copy\n"));
+            assert_eq!(kde.1, "0");
+        }
     }
 }
