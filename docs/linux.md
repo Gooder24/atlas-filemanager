@@ -86,8 +86,10 @@ follows symlinks.
 ## Clipboard
 
 Copying files puts them on the clipboard as `text/uri-list`, which other file managers
-paste. On Wayland Atlas uses the data-control protocol (sway, niri, Hyprland, KDE); where
-the compositor lacks it, Atlas falls back to the X11 clipboard through XWayland.
+paste. On Wayland Atlas uses the data-control protocol (sway, niri, Hyprland, KDE) and adds
+plain text for editors and the GNOME and KDE cut markers, so Nautilus and Dolphin move what
+Atlas cut. Where the compositor lacks data-control, Atlas falls back to the X11 clipboard
+through XWayland, with `text/uri-list` only.
 
 ## Known limits
 
