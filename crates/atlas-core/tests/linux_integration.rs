@@ -117,6 +117,54 @@ fn trash_restore_and_purge() {
     assert!(status.success());
 }
 
+/// Runs only inside the child process started by
+/// `freedesktop_thumbnail_is_found_by_uri_hash`, whose XDG_CACHE_HOME is isolated.
+#[test]
+fn thumbnail_child() {
+    use md5::{Digest, Md5};
+    let Some(work) = std::env::var_os("ATLAS_THUMB_CHILD_DIR") else {
+        return;
+    };
+    let work = std::fs::canonicalize(work).unwrap();
+    let cache = PathBuf::from(std::env::var_os("XDG_CACHE_HOME").unwrap());
+    let photo = work.join("my photo.jpg");
+    let other = work.join("other.jpg");
+    std::fs::write(&photo, b"not decoded").unwrap();
+    std::fs::write(&other, b"not decoded").unwrap();
+
+    // The spec names the file after the MD5 of the escaped file:// URI.
+    let uri = format!("file://{}", photo.display()).replace(' ', "%20");
+    let hash = format!("{:x}", Md5::digest(uri.as_bytes()));
+    let large = cache.join("thumbnails/large");
+    std::fs::create_dir_all(&large).unwrap();
+    image::RgbaImage::from_pixel(256, 128, image::Rgba([200, 30, 30, 255]))
+        .save(large.join(format!("{hash}.png")))
+        .unwrap();
+
+    let (rgba, w, h) =
+        atlas_core::fs::preview::freedesktop_thumbnail(&photo, 64).expect("cached thumbnail found");
+    assert_eq!((w, h), (64, 32));
+    assert_eq!(rgba.len(), 64 * 32 * 4);
+    assert_eq!(&rgba[..4], &[200, 30, 30, 255]);
+    assert!(atlas_core::fs::preview::freedesktop_thumbnail(&other, 64).is_none());
+}
+
+#[test]
+fn freedesktop_thumbnail_is_found_by_uri_hash() {
+    let root = fixture();
+    let work = root.path().join("work");
+    let cache = root.path().join("cache");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(&cache).unwrap();
+    let status = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "thumbnail_child", "--nocapture"])
+        .env("ATLAS_THUMB_CHILD_DIR", &work)
+        .env("XDG_CACHE_HOME", &cache)
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
 fn write_tree(root: &Path) -> u64 {
     let mut total = 0;
     for d in 0..5 {
