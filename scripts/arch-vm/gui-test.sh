@@ -102,6 +102,8 @@ check "copy 100 files" "[[ \$(ls '$work/dst' | wc -l) -eq 100 ]] && cmp -s '$wor
 # 5. Clipboard to other apps: Atlas copy is visible as text/uri-list
 goto "$work/rename"; key -k Home; key -M ctrl c -m ctrl
 check "clipboard exports text/uri-list" "wl-paste -t text/uri-list 2>/dev/null | grep -q 'file://$work/rename/after.txt'"
+check "clipboard offers text to editors" "wl-paste -t text/plain 2>/dev/null | grep -q 'file://$work/rename/after.txt'"
+check "clipboard marks a copy for GNOME" "wl-paste -t x-special/gnome-copied-files 2>/dev/null | head -n1 | grep -qx copy"
 
 # 6. Clipboard from other apps: wl-copy a file, paste in Atlas
 printf 'file://%s\r\n' "$work/clip-src/from-wl-copy.txt" | wl-copy -t text/uri-list
