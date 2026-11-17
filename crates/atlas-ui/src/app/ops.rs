@@ -586,7 +586,7 @@ impl App {
         };
         #[cfg(not(windows))]
         let source = {
-            let (sys_text, sys_files) = read_system_clipboard(|cb| {
+            let read = read_system_clipboard(|cb| {
                 let text = cb.get_text().ok();
                 let from_text = text.as_deref().and_then(|text| {
                     let (paths, ext_cut) = crate::dnd::parse_uri_list_with_cut(text);
@@ -601,8 +601,9 @@ impl App {
                         .map(|paths| (paths, false))
                 });
                 Some((text, files))
-            })
-            .unwrap_or_default();
+            });
+            let timed_out = read.is_err();
+            let (sys_text, sys_files) = read.ok().flatten().unwrap_or_default();
 
             match sys_files {
                 Some((sys_paths, ext_cut)) => {
@@ -639,10 +640,8 @@ impl App {
                         .as_ref()
                         .and_then(|c| c.remote_id.as_ref())
                         .is_some();
-                    if let Some(text) = &sys_text {
-                        if !text.trim().is_empty() && !is_remote {
-                            self.state.ops.clipboard = None;
-                        }
+                    if system_clipboard_replaced(timed_out, sys_text.as_deref()) && !is_remote {
+                        self.state.ops.clipboard = None;
                     }
                     self.state.ops.clipboard.as_ref().map(|c| {
                         (
@@ -1071,16 +1070,30 @@ impl App {
     }
 }
 
+/// Whether something other than files now holds the system clipboard, so
+/// Atlas's own cut or copy is stale. A read that timed out counts: the usual
+/// owner that cannot answer is one of Atlas's own text inputs.
+#[cfg(not(windows))]
+fn system_clipboard_replaced(timed_out: bool, text: Option<&str>) -> bool {
+    timed_out || text.is_some_and(|text| !text.trim().is_empty())
+}
+
+/// The system clipboard did not answer in time (Linux only).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ClipboardTimedOut;
+
 /// Reads the system clipboard without letting the read freeze the UI.
+/// `Ok(None)` means no clipboard or nothing readable.
 ///
-/// On Linux the read runs on a helper thread and counts as empty after
-/// [`CLIPBOARD_READ_TIMEOUT`]. When Atlas itself owns the Wayland clipboard
-/// (text copied in one of its inputs), the compositor asks the UI thread for
-/// the data, so a read that waits on the UI thread never ends; the helper
-/// finishes once the UI thread is free again. Elsewhere the read runs inline.
+/// On Linux the read runs on a helper thread and gives up after 500 ms. When
+/// Atlas itself owns the Wayland clipboard (text copied in one of its inputs),
+/// the compositor asks the UI thread for the data, so a read that waits on the
+/// UI thread never ends; the helper finishes once the UI thread is free again.
+/// Elsewhere the read runs inline.
 pub(crate) fn read_system_clipboard<T: Send + 'static>(
     read: impl FnOnce(&mut arboard::Clipboard) -> Option<T> + Send + 'static,
-) -> Option<T> {
+) -> Result<Option<T>, ClipboardTimedOut> {
     let read = move || {
         arboard::Clipboard::new()
             .ok()
@@ -1089,7 +1102,7 @@ pub(crate) fn read_system_clipboard<T: Send + 'static>(
     #[cfg(target_os = "linux")]
     return off_thread(CLIPBOARD_READ_TIMEOUT, read);
     #[cfg(not(target_os = "linux"))]
-    read()
+    Ok(read())
 }
 
 #[cfg(target_os = "linux")]
@@ -1100,15 +1113,22 @@ const CLIPBOARD_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_mi
 fn off_thread<T: Send + 'static>(
     timeout: std::time::Duration,
     read: impl FnOnce() -> Option<T> + Send + 'static,
-) -> Option<T> {
+) -> Result<Option<T>, ClipboardTimedOut> {
+    use std::sync::mpsc::RecvTimeoutError;
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
+    let spawned = std::thread::Builder::new()
         .name("clipboard-read".into())
         .spawn(move || {
             let _ = tx.send(read());
-        })
-        .ok()?;
-    rx.recv_timeout(timeout).ok().flatten()
+        });
+    if spawned.is_err() {
+        return Ok(None);
+    }
+    match rx.recv_timeout(timeout) {
+        Ok(value) => Ok(value),
+        Err(RecvTimeoutError::Timeout) => Err(ClipboardTimedOut),
+        Err(RecvTimeoutError::Disconnected) => Ok(None),
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -1213,10 +1233,19 @@ mod linux_clipboard {
             let read = super::super::off_thread(std::time::Duration::from_millis(20), move || {
                 never.recv().ok().map(|()| "late")
             });
-            assert_eq!(read, None);
+            assert_eq!(read, Err(super::super::ClipboardTimedOut));
             let read =
                 super::super::off_thread(std::time::Duration::from_secs(5), || Some("files"));
-            assert_eq!(read, Some("files"));
+            assert_eq!(read, Ok(Some("files")));
+        }
+
+        #[test]
+        fn a_timed_out_or_text_clipboard_makes_the_internal_cut_stale() {
+            use super::super::system_clipboard_replaced as replaced;
+            assert!(replaced(true, None));
+            assert!(replaced(false, Some("hello")));
+            assert!(!replaced(false, Some(" \n")));
+            assert!(!replaced(false, None));
         }
 
         #[test]

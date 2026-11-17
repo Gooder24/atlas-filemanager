@@ -227,6 +227,8 @@ impl App {
                     let key = crate::app::ops::read_system_clipboard(|clipboard| {
                         clipboard.get_text().ok()
                     })
+                    .ok()
+                    .flatten()
                     .map(|text| text.trim().to_owned())
                     .unwrap_or_default();
                     // Keys are single short tokens; anything else is not a key.
