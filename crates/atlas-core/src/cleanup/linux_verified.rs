@@ -27,6 +27,7 @@ fn inode_id(ino: u64) -> [u8; 16] {
 
 fn filetime(stat: &Stat) -> u64 {
     let secs = u64::try_from(stat.st_mtime).unwrap_or(0);
+    #[allow(clippy::useless_conversion)] // reason: st_mtime_nsec is signed on some targets
     let nanos = u64::try_from(stat.st_mtime_nsec).unwrap_or(0);
     (secs + FILETIME_UNIX_OFFSET) * 10_000_000 + nanos / 100
 }
@@ -135,6 +136,7 @@ pub fn capacity(path: &Path) -> Option<(u64, u64)> {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)] // reason: test fixtures
 mod tests {
     use super::*;
 

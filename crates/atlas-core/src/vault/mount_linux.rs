@@ -1,6 +1,8 @@
 //! Linux FUSE (fuser) virtual folder mirroring mount.rs's WinFsp callbacks.
 //! Only ciphertext is persisted by filesystem callbacks.
 #![cfg(target_os = "linux")]
+// reason: FUSE callbacks and mount setup run on their own threads, never on the UI thread.
+#![allow(clippy::disallowed_methods)]
 
 use super::{live, Entry, Session};
 use anyhow::Result;
@@ -175,7 +177,10 @@ impl Shared {
     }
 
     fn touch(&self) {
-        *self.activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+        *self
+            .activity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Instant::now();
     }
 }
 
@@ -204,7 +209,9 @@ impl Mounted {
             gid,
         });
         let result = (|| -> anyhow::Result<fuser::BackgroundSession> {
-            let parent = path.parent().expect("mount path has a parent");
+            let parent = path
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("mount path has no parent"))?;
             std::fs::create_dir_all(parent)?;
             remove_stale_mounts(parent);
             std::fs::create_dir_all(&path)?;

@@ -100,10 +100,10 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn modified(&self) -> u64 {
+    pub const fn modified(&self) -> u64 {
         self.modified
     }
-    pub fn attributes(&self) -> u32 {
+    pub const fn attributes(&self) -> u32 {
         self.attributes
     }
 }
