@@ -305,3 +305,74 @@ fn private_folder_mounts_through_fuse_without_plaintext_on_disk() {
         b"second-marker-7788"
     );
 }
+
+/// Budgets from LINUX_PORT_PLAN: a 100 000-file folder lists in under 2 s and a
+/// Ctrl+K query over 100 000 indexed entries matches in under 200 ms.
+/// `cargo test --release -p atlas-core --test linux_integration -- --ignored --nocapture large_folder`
+#[test]
+#[ignore = "timing budget; run in release"]
+fn large_folder_lists_and_matches_within_budget() {
+    let dir = fixture();
+    let big = dir.path().join("big");
+    std::fs::create_dir(&big).unwrap();
+    for i in 0..100_000 {
+        std::fs::File::create(big.join(format!("file-{i:06}.dat"))).unwrap();
+    }
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let started = Instant::now();
+    let entries = runtime
+        .block_on(atlas_core::fs::list::list_dir(
+            &big,
+            false,
+            SortColumn::Name,
+            SortDir::Asc,
+            true,
+        ))
+        .unwrap();
+    let listed = started.elapsed();
+    assert_eq!(entries.len(), 100_000);
+    assert_eq!(entries.last().unwrap().name, "file-099999.dat");
+
+    // The global Ctrl+K index (atlas-search-service) feeds the same matcher.
+    let mut pool = atlas_core::search::nucleo_pool::NucleoPool::new();
+    let injector = pool.injector();
+    for entry in &entries {
+        let path = big.join(entry.name.as_str());
+        let display = path.to_string_lossy().into_owned();
+        injector.push(
+            atlas_core::search::nucleo_pool::IndexEntry {
+                path,
+                is_dir: false,
+            },
+            move |_item, cols| cols[0] = display.as_str().into(),
+        );
+    }
+    let end = Instant::now() + DEADLINE;
+    while pool.nucleo.snapshot().item_count() < 100_000 {
+        pool.tick();
+        assert!(Instant::now() < end, "index incomplete");
+    }
+    let started = Instant::now();
+    pool.set_pattern("file-087654");
+    loop {
+        let status = pool.nucleo.tick(10);
+        let snapshot = pool.nucleo.snapshot();
+        if !status.running && snapshot.matched_item_count() >= 1 {
+            let best = snapshot.get_matched_item(0).unwrap();
+            assert!(best.data.path.ends_with("file-087654.dat"));
+            break;
+        }
+        assert!(Instant::now() < end, "query did not finish");
+    }
+    let matched = started.elapsed();
+    println!("MEASURE list 100k: {listed:?}  match over 100k: {matched:?}");
+    assert!(listed < Duration::from_secs(2), "list took {listed:?}");
+    assert!(
+        matched < Duration::from_millis(200),
+        "match took {matched:?}"
+    );
+}
