@@ -11,7 +11,9 @@ pkgdesc='Modern GPU-accelerated file manager built with Rust and GPUI'
 arch=('x86_64')
 url='https://github.com/neondeex/atlas-filemanager'
 license=('AGPL-3.0-or-later')
-depends=('glibc' 'gcc-libs' 'openssl' 'libxkbcommon' 'libxkbcommon-x11' 'libxcb' 'fontconfig'
+# fontconfig, wayland, vulkan-icd-loader and libglvnd are loaded with dlopen by GPUI,
+# so namcap cannot see that they are used.
+depends=('glibc' 'libgcc' 'openssl' 'libxkbcommon' 'libxkbcommon-x11' 'libxcb' 'fontconfig'
          'wayland' 'vulkan-icd-loader' 'libglvnd' 'ttf-dejavu' 'hicolor-icon-theme')
 makedepends=('git' 'rustup' 'clang' 'pkgconf')
 optdepends=('fuse3: open private folders as a mounted folder'
