@@ -367,6 +367,12 @@ pub fn run(
                 closing_app
                     .update(cx, |app, cx| {
                         let allowed = app.close_native_vault(false);
+                        // On Linux the view is released with its window, before
+                        // on_app_quit runs, so the session is saved here.
+                        #[cfg(target_os = "linux")]
+                        if allowed {
+                            app.save_on_quit();
+                        }
                         cx.notify();
                         allowed
                     })
