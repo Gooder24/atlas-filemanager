@@ -1162,8 +1162,8 @@ mod linux_clipboard {
     }
 
     /// The plain text comes first: wl-clipboard-rs offers the first text-like
-    /// source under text/plain;charset=utf-8, UTF8_STRING and the other text
-    /// names editors ask for, and text/uri-list counts as text-like too.
+    /// source under `text/plain;charset=utf-8`, `UTF8_STRING` and the other text
+    /// names editors ask for, and `text/uri-list` counts as text-like too.
     pub(super) fn sources(paths: &[PathBuf], is_cut: bool, text: &str) -> Vec<MimeSource> {
         let text = MimeSource {
             source: Source::Bytes(text.as_bytes().into()),
