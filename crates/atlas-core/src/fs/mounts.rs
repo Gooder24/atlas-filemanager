@@ -110,9 +110,9 @@ const LINUX_SYSTEM_MOUNT_ROOTS: &[&str] = &[
     "/boot", "/efi", "/etc", "/sysroot", "/usr", "/var", "/tmp", "/snap",
 ];
 
-/// Fedora Atomic keeps `/home` and `/mnt` here, so a home partition or a second disk
-/// is mounted under `/var`.
-const LINUX_USER_MOUNT_ROOTS_IN_VAR: &[&str] = &["/var/home", "/var/mnt"];
+/// Fedora Atomic keeps `/home`, `/mnt`, `/opt` and `/srv` here, so a home partition or
+/// a second disk is mounted under `/var`.
+const LINUX_USER_MOUNT_ROOTS_IN_VAR: &[&str] = &["/var/home", "/var/mnt", "/var/opt", "/var/srv"];
 
 fn is_linux_system_mount(path: &std::path::Path) -> bool {
     LINUX_SYSTEM_MOUNT_ROOTS
@@ -126,14 +126,13 @@ fn is_linux_system_mount(path: &std::path::Path) -> bool {
 /// Linux lists every mount of a disk: Fedora's btrfs layout mounts one partition at `/`
 /// and `/home` (its cloud image also at `/var` and `/boot`), plus the EFI partition at
 /// `/boot/efi`. Keep one entry per block device, the mount point nearest the root
-/// (fewest components, then shortest, so `/` wins over `/home`), and drop system mounts,
-/// so the sidebar shows disks the way Windows shows drive letters.
+/// (fewest components, then shortest, so `/` wins over `/home`), and drop it when that
+/// is a system mount, so the sidebar shows disks the way Windows shows drive letters.
+/// The nearest mount is chosen among all of a device's mounts: on Fedora Atomic the
+/// root disk is at `/etc` and `/var/home` while `/` is composefs, and it must not show
+/// up again as `/var/home`.
 /// `drives` must be sorted by mount point; the second field is the mount source.
 fn user_visible_linux_mounts(drives: Vec<(DriveInfo, String)>) -> Vec<(DriveInfo, String)> {
-    let drives: Vec<_> = drives
-        .into_iter()
-        .filter(|(drive, _)| !is_linux_system_mount(&drive.mount_point))
-        .collect();
     let nearness = |path: &std::path::Path| (path.components().count(), path.as_os_str().len());
     let mut nearest = std::collections::HashMap::new();
     for (drive, device) in drives
@@ -148,8 +147,9 @@ fn user_visible_linux_mounts(drives: Vec<(DriveInfo, String)>) -> Vec<(DriveInfo
     let keep: Vec<bool> = drives
         .iter()
         .map(|(drive, device)| {
-            !device.starts_with("/dev/")
-                || nearest.get(device.as_str()) == Some(&&drive.mount_point)
+            !is_linux_system_mount(&drive.mount_point)
+                && (!device.starts_with("/dev/")
+                    || nearest.get(device.as_str()) == Some(&&drive.mount_point))
         })
         .collect();
     drives
@@ -304,6 +304,19 @@ mod tests {
             ("/mnt/b", "server:/a"),
         ];
         assert_eq!(visible(&mounts), ["/", "/mnt/a", "/mnt/b"]);
+    }
+
+    #[test]
+    fn fedora_atomic_default_layout_shows_its_disk_once() {
+        let mounts = [
+            ("/", "composefs"),
+            ("/boot", "/dev/nvme0n1p2"),
+            ("/boot/efi", "/dev/nvme0n1p1"),
+            ("/etc", "/dev/nvme0n1p3"),
+            ("/var", "/dev/nvme0n1p3"),
+            ("/var/home", "/dev/nvme0n1p3"),
+        ];
+        assert_eq!(visible(&mounts), ["/"]);
     }
 
     #[test]
