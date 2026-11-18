@@ -104,8 +104,24 @@ fn list_drives_internal() -> Vec<DriveInfo> {
 }
 
 /// Mount points under these hold the operating system, not user files; GIO counts
-/// most of them as system mounts too.
-const LINUX_SYSTEM_MOUNT_ROOTS: &[&str] = &["/boot", "/efi", "/usr", "/var", "/tmp", "/snap"];
+/// most of them as system mounts too. `/etc` and `/sysroot` are bind mounts of the
+/// root disk on Fedora Atomic.
+const LINUX_SYSTEM_MOUNT_ROOTS: &[&str] = &[
+    "/boot", "/efi", "/etc", "/sysroot", "/usr", "/var", "/tmp", "/snap",
+];
+
+/// Fedora Atomic keeps `/home` and `/mnt` here, so a home partition or a second disk
+/// is mounted under `/var`.
+const LINUX_USER_MOUNT_ROOTS_IN_VAR: &[&str] = &["/var/home", "/var/mnt"];
+
+fn is_linux_system_mount(path: &std::path::Path) -> bool {
+    LINUX_SYSTEM_MOUNT_ROOTS
+        .iter()
+        .any(|root| path.starts_with(root))
+        && !LINUX_USER_MOUNT_ROOTS_IN_VAR
+            .iter()
+            .any(|root| path.starts_with(root))
+}
 
 /// Linux lists every mount of a disk: Fedora's btrfs layout mounts one partition at `/`
 /// and `/home` (its cloud image also at `/var` and `/boot`), plus the EFI partition at
@@ -116,11 +132,7 @@ const LINUX_SYSTEM_MOUNT_ROOTS: &[&str] = &["/boot", "/efi", "/usr", "/var", "/t
 fn user_visible_linux_mounts(drives: Vec<(DriveInfo, String)>) -> Vec<(DriveInfo, String)> {
     let drives: Vec<_> = drives
         .into_iter()
-        .filter(|(drive, _)| {
-            !LINUX_SYSTEM_MOUNT_ROOTS
-                .iter()
-                .any(|root| drive.mount_point.starts_with(root))
-        })
+        .filter(|(drive, _)| !is_linux_system_mount(&drive.mount_point))
         .collect();
     let nearness = |path: &std::path::Path| (path.components().count(), path.as_os_str().len());
     let mut nearest = std::collections::HashMap::new();
@@ -292,5 +304,24 @@ mod tests {
             ("/mnt/b", "server:/a"),
         ];
         assert_eq!(visible(&mounts), ["/", "/mnt/a", "/mnt/b"]);
+    }
+
+    #[test]
+    fn fedora_atomic_home_and_mnt_under_var_stay() {
+        let mounts = [
+            ("/", "composefs"),
+            ("/boot", "/dev/nvme0n1p2"),
+            ("/boot/efi", "/dev/nvme0n1p1"),
+            ("/etc", "/dev/nvme0n1p3"),
+            ("/sysroot", "/dev/nvme0n1p3"),
+            ("/var", "/dev/nvme0n1p3"),
+            ("/var/home", "/dev/nvme0n1p4"),
+            ("/var/mnt/data", "/dev/sdb1"),
+            ("/run/media/me/USB", "/dev/sdc1"),
+        ];
+        assert_eq!(
+            visible(&mounts),
+            ["/", "/run/media/me/USB", "/var/home", "/var/mnt/data"]
+        );
     }
 }
