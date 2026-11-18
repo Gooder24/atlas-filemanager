@@ -36,7 +36,8 @@ rustPlatform.buildRustPackage {
   # Release builds get their number from CI (ATLAS_RELEASE_VERSION); a source build reports Cargo.toml's.
   inherit ((lib.importTOML ../Cargo.toml).package) version;
 
-  # Without the Nix files, so editing the flake does not rebuild Atlas.
+  # Without the Nix files and target/: a change to only the comments or formatting of the Nix files does not
+  # rebuild Atlas; changing the nixpkgs pin or the build inputs does.
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.difference (lib.fileset.fromSource (lib.cleanSource ../.)) (
