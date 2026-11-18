@@ -190,8 +190,14 @@ impl Worker {
                 policy::user_temp_root()
             };
             let Some(temp) = temp else {
-                self.snapshot.status = ScanStatus::Failed;
-                self.snapshot.message = Some("cleanup_unavailable".into());
+                // Linux has no Temp folder (see `user_temp_root`): a disk without any
+                // known cache has nothing to clean, which is not a failure.
+                if cfg!(not(windows)) && self.mode == ScanMode::Temporary {
+                    self.snapshot.message = Some("cleanup_empty".into());
+                } else {
+                    self.snapshot.status = ScanStatus::Failed;
+                    self.snapshot.message = Some("cleanup_unavailable".into());
+                }
                 self.finish();
                 return;
             };
@@ -205,6 +211,13 @@ impl Worker {
                 .flat_map(|c| c.roots)
                 .filter(|r| r != &temp && r.starts_with(&temp))
                 .collect();
+            // Another disk mounted inside the folder is not part of this cleanup.
+            #[cfg(target_os = "linux")]
+            self.nested.extend(
+                policy::mount_points()
+                    .into_iter()
+                    .filter(|m| m != &temp && m.starts_with(&temp)),
+            );
             self.snapshot.root = temp.clone();
             self.read_root(&temp);
         } else {
@@ -496,9 +509,12 @@ impl Worker {
             },
             MAX_FILES,
         );
+        // A plan stores paths as JSON strings, so a name that is not UTF-8 would
+        // make the whole plan fail: such files are never offered.
         if self.mode != ScanMode::Folder
             && self.mode != ScanMode::FastFolder
             && bytes > 0
+            && path.to_str().is_some()
             && metadata
                 .modified()
                 .ok()
@@ -597,6 +613,7 @@ fn unsafe_entry(metadata: &fs::Metadata) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)] // reason: test fixtures
 mod tests {
     use super::*;
     #[test]
@@ -712,6 +729,30 @@ mod tests {
         assert_eq!(worker.snapshot.status, ScanStatus::Partial);
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn a_disk_without_known_caches_is_empty_not_failed() {
+        let fixture = tempfile::tempdir().unwrap();
+        let (sender, drain) = flume::bounded(1);
+        let mut worker = Worker {
+            sender,
+            drain,
+            cancel: Arc::new(AtomicBool::new(false)),
+            paused: Arc::new(AtomicBool::new(false)),
+            snapshot: DiskSnapshot::default(),
+            rows: BinaryHeap::new(),
+            files: BinaryHeap::new(),
+            last_publish: Instant::now(),
+            stored_path_bytes: 0,
+            mode: ScanMode::Temporary,
+            nested: Vec::new(),
+        };
+        worker.run(fixture.path().to_owned());
+        assert_eq!(worker.snapshot.status, ScanStatus::Complete);
+        assert_eq!(worker.snapshot.message.as_deref(), Some("cleanup_empty"));
+        assert!(worker.snapshot.reclaimable.is_empty());
+    }
+
     #[test]
     fn nested_category_roots_are_left_to_their_own_category() {
         let fixture = tempfile::tempdir().unwrap();
@@ -723,7 +764,7 @@ mod tests {
                 .write(true)
                 .open(path)
                 .unwrap()
-                .set_modified(SystemTime::now() - Duration::from_secs(8 * 24 * 3600))
+                .set_modified(SystemTime::now() - Duration::from_hours(8 * 24))
                 .unwrap();
         }
         let (sender, drain) = flume::bounded(1);

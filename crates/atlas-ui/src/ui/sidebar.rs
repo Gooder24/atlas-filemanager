@@ -3895,7 +3895,7 @@ fn drive_row(
     // an item in a folder.
     row.context_menu({
         let lens_path = drive.mount_point.clone();
-        let properties_path = drive.mount_point.clone();
+        let properties_path = drive.mount_point;
         move |menu, _window, _cx| {
             menu.menu(
                 rust_i18n::t!("sidebar_analyze_space"),

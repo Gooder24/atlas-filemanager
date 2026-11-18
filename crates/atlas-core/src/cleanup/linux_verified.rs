@@ -1,10 +1,11 @@
 //! Linux counterpart of `atlas_win_space::cleanup`. A candidate pins the
 //! (device, inode) of the file and of every ancestor directory. Deletion re-walks
 //! the path with `openat(O_NOFOLLOW)` from `/`, requires every identity to match,
-//! and unlinks the name relative to the verified parent descriptor, so a swapped
-//! directory or symlink can never redirect the delete.
+//! and checks the file again after renaming it to a private name in its verified
+//! parent, so neither a swapped directory or symlink nor a file put in its place
+//! at the last moment can redirect the delete.
 use atlas_model::cleanup::{AncestorIdentity, CleanupCandidate, FileIdentity};
-use rustix::fs::{self as rfs, AtFlags, FileType, Mode, OFlags, Stat};
+use rustix::fs::{self as rfs, AtFlags, FileType, Mode, OFlags, RenameFlags, Stat};
 use std::{
     ffi::OsString,
     io,
@@ -114,16 +115,52 @@ pub fn inspect(path: &Path) -> io::Result<CleanupCandidate> {
 
 /// Deletes only the reviewed file: fails if any ancestor or the file itself was
 /// replaced, modified or gained another hardlink since `inspect`.
+///
+/// Linux cannot unlink an open file handle, so the name is first renamed to a new
+/// random name in the same directory and the renamed file is checked there. A
+/// file put under the original name after the scan is never the one unlinked.
+/// This guards against other programs changing a cache, not against a program
+/// of the same user that watches the folder and swaps the renamed file on
+/// purpose: such a program can delete the user's files anyway.
+///
+/// A file that is not the reviewed one, or that cannot be unlinked, is renamed
+/// back. If its name was taken meanwhile it is not replaced, and the error gives
+/// the private name to look for.
 pub fn delete_verified(expected: &CleanupCandidate) -> io::Result<u64> {
     let (parent, ancestors, name) = walk(&expected.path)?;
     if ancestors != expected.ancestors {
         return Err(scope_changed());
     }
-    if leaf_identity(&parent, &name, &ancestors)? != expected.identity {
-        return Err(scope_changed());
+    let hidden = OsString::from(format!(".atlas-cleanup-{}", uuid::Uuid::new_v4().simple()));
+    rfs::renameat_with(
+        &parent,
+        Path::new(&name),
+        &parent,
+        Path::new(&hidden),
+        RenameFlags::NOREPLACE,
+    )?;
+    let error = match leaf_identity(&parent, &hidden, &ancestors) {
+        Ok(identity) if identity == expected.identity => {
+            match rfs::unlinkat(&parent, Path::new(&hidden), AtFlags::empty()) {
+                Ok(()) => return Ok(expected.identity.bytes),
+                Err(e) => io::Error::from(e),
+            }
+        }
+        _ => scope_changed(),
+    };
+    match rfs::renameat_with(
+        &parent,
+        Path::new(&hidden),
+        &parent,
+        Path::new(&name),
+        RenameFlags::NOREPLACE,
+    ) {
+        Ok(()) => Err(error),
+        Err(_) => Err(io::Error::other(format!(
+            "The file could not be put back under its name; look for it as {}",
+            expected.path.with_file_name(&hidden).display()
+        ))),
     }
-    rfs::unlinkat(&parent, Path::new(&name), AtFlags::empty())?;
-    Ok(expected.identity.bytes)
 }
 
 /// (total, available to this user) bytes of the filesystem holding `path`.
@@ -174,6 +211,23 @@ mod tests {
         let link = root.path().join("link");
         std::os::unix::fs::symlink(&target, &link).unwrap();
         assert!(inspect(&link).is_err());
+    }
+
+    #[test]
+    fn replaced_leaf_is_kept_under_its_name() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("file");
+        std::fs::write(&file, b"reviewed").unwrap();
+        let expected = inspect(&file).unwrap();
+        std::fs::rename(&file, root.path().join("moved")).unwrap();
+        std::fs::write(&file, b"replacement").unwrap();
+        assert!(delete_verified(&expected).is_err());
+        assert_eq!(std::fs::read(&file).unwrap(), b"replacement");
+        let names: Vec<_> = std::fs::read_dir(root.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names.len(), 2, "{names:?}");
     }
 
     #[test]
