@@ -1095,7 +1095,7 @@ fn system_clipboard_replaced(
 /// The clipboard gave the content or said it holds none of that kind; any
 /// other error (the compositor did not answer) tells nothing about what it holds.
 #[cfg(not(windows))]
-fn clipboard_answered<T>(read: &Result<T, arboard::Error>) -> bool {
+const fn clipboard_answered<T>(read: &Result<T, arboard::Error>) -> bool {
     !matches!(read, Err(e) if !matches!(e, arboard::Error::ContentNotAvailable))
 }
 
