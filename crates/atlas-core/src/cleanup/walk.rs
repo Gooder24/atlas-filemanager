@@ -7,6 +7,7 @@ use super::{
 };
 use atlas_model::cleanup::ScanBackend;
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -28,6 +29,9 @@ pub(super) struct Control {
 struct Shared<'a> {
     builder: Mutex<TreeBuilder>,
     control: &'a Control,
+    /// Other filesystems mounted below the root. The walk skips them like
+    /// `du -x`: /proc, /sys and a network share are not on this disk.
+    mounts: HashSet<PathBuf>,
 }
 
 impl Shared<'_> {
@@ -42,7 +46,11 @@ impl Shared<'_> {
 }
 
 #[cfg(windows)]
-fn read_dir(path: &Path, mut emit: impl FnMut(&str, bool, u32, u64)) -> std::io::Result<()> {
+fn read_dir(
+    path: &Path,
+    _mounts: &HashSet<PathBuf>,
+    mut emit: impl FnMut(&str, bool, u32, u64),
+) -> std::io::Result<()> {
     atlas_win_space::directory::enumerate_while(path, |e| {
         emit(
             &e.name.to_string_lossy(),
@@ -54,9 +62,18 @@ fn read_dir(path: &Path, mut emit: impl FnMut(&str, bool, u32, u64)) -> std::io:
     })
 }
 #[cfg(not(windows))]
-fn read_dir(path: &Path, mut emit: impl FnMut(&str, bool, u32, u64)) -> std::io::Result<()> {
+fn read_dir(
+    path: &Path,
+    mounts: &HashSet<PathBuf>,
+    mut emit: impl FnMut(&str, bool, u32, u64),
+) -> std::io::Result<()> {
     for entry in std::fs::read_dir(path)? {
         let Ok(entry) = entry else { continue };
+        // Checked before any stat, which would hang on a dead network mount.
+        if mounts.contains(&entry.path()) {
+            emit(&entry.file_name().to_string_lossy(), true, 0x400, 0);
+            continue;
+        }
         let Ok(meta) = entry.metadata() else { continue };
         let attrs = u32::from(meta.file_type().is_symlink()) * 0x400;
         emit(
@@ -91,30 +108,36 @@ fn visit<'s>(
     let mut kept: Vec<(String, u64)> = Vec::new();
     let (mut loose_bytes, mut loose_files, mut skipped) = (0u64, 0u64, 0u64);
     let (mut files, mut bytes) = (0u64, 0u64);
-    let result = read_dir(&path, |name, directory, attributes, size| {
-        if attributes & UNSAFE_ATTRIBUTES != 0 {
-            skipped += 1;
-        } else if directory {
-            let child = path.join(name);
-            if policy::protected(&child)
-                || crate::vault::is_private_path(&child)
-                || crate::vault::live::is_private(&child)
-            {
+    let result = read_dir(
+        &path,
+        &shared.mounts,
+        |name, directory, attributes, size| {
+            if attributes & UNSAFE_ATTRIBUTES != 0 {
                 skipped += 1;
+            } else if directory {
+                let child = path.join(name);
+                // `name` is lossy, so the joined path is checked against the mounts again.
+                if shared.mounts.contains(&child)
+                    || policy::protected(&child)
+                    || crate::vault::is_private_path(&child)
+                    || crate::vault::live::is_private(&child)
+                {
+                    skipped += 1;
+                } else {
+                    dirs.push((name.to_owned(), child));
+                }
             } else {
-                dirs.push((name.to_owned(), child));
+                files += 1;
+                bytes = bytes.saturating_add(size);
+                if size >= FILE_KEEP {
+                    kept.push((name.to_owned(), size));
+                } else {
+                    loose_bytes = loose_bytes.saturating_add(size);
+                    loose_files += 1;
+                }
             }
-        } else {
-            files += 1;
-            bytes = bytes.saturating_add(size);
-            if size >= FILE_KEEP {
-                kept.push((name.to_owned(), size));
-            } else {
-                loose_bytes = loose_bytes.saturating_add(size);
-                loose_files += 1;
-            }
-        }
-    });
+        },
+    );
     shared.control.files.fetch_add(files, Ordering::Relaxed);
     shared.control.bytes.fetch_add(bytes, Ordering::Relaxed);
     let children: Vec<u32> = {
@@ -150,6 +173,22 @@ fn thread_count() -> usize {
 pub(super) fn walk(
     root: &Path,
     control: &Control,
+    poll: impl FnMut(u64, u64),
+) -> std::io::Result<SpaceTree> {
+    #[cfg(target_os = "linux")]
+    let mounts = policy::mount_points()
+        .into_iter()
+        .filter(|mount| mount != root)
+        .collect();
+    #[cfg(not(target_os = "linux"))]
+    let mounts = HashSet::new();
+    walk_with(root, mounts, control, poll)
+}
+
+fn walk_with(
+    root: &Path,
+    mounts: HashSet<PathBuf>,
+    control: &Control,
     mut poll: impl FnMut(u64, u64),
 ) -> std::io::Result<SpaceTree> {
     let pool = rayon::ThreadPoolBuilder::new()
@@ -160,6 +199,7 @@ pub(super) fn walk(
     let shared = Shared {
         builder: Mutex::new(TreeBuilder::new(FILE_KEEP)),
         control,
+        mounts,
     };
     std::thread::scope(|s| {
         let job = s.spawn(|| {
@@ -204,5 +244,29 @@ mod tests {
         assert_eq!(s.entry_count, 40);
         assert_eq!(s.skipped, 1);
         assert_eq!(s.entries.len(), 20);
+    }
+
+    // Windows has no mount table here; its enumerator skips reparse points.
+    #[cfg(not(windows))]
+    #[test]
+    fn walk_skips_other_filesystems_mounted_below_the_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("home")).unwrap();
+        std::fs::write(root.join("home/f"), vec![0u8; 1000]).unwrap();
+        std::fs::create_dir_all(root.join("proc")).unwrap();
+        std::fs::write(root.join("proc/kcore"), vec![0u8; 5000]).unwrap();
+        let control = Control {
+            cancel: Arc::default(),
+            paused: Arc::default(),
+            files: AtomicU64::new(0),
+            bytes: AtomicU64::new(0),
+        };
+        let mounts = HashSet::from([root.join("proc")]);
+        let tree = walk_with(root, mounts, &control, |_, _| {}).unwrap();
+        let s = tree.snapshot(root, 1).unwrap();
+        assert_eq!(s.bytes, 1000);
+        assert_eq!(s.entry_count, 1);
+        assert_eq!(s.skipped, 1);
     }
 }

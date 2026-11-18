@@ -28,8 +28,7 @@ pub fn is_drive_root(path: &Path) -> bool {
 /// right-click never waits on a hung network mount.
 #[cfg(target_os = "linux")]
 fn is_mount_point(path: &Path) -> bool {
-    #[allow(clippy::disallowed_methods)] // reason: procfs is in memory and never blocks
-    let Ok(table) = std::fs::read_to_string("/proc/self/mountinfo") else {
+    let Some(table) = mount_table() else {
         return path == Path::new("/");
     };
     let path = path.as_os_str().as_encoded_bytes();
@@ -38,16 +37,39 @@ fn is_mount_point(path: &Path) -> bool {
     } else {
         path
     };
-    table
-        .lines()
-        .filter_map(|line| line.split(' ').nth(4))
-        .any(|mount| unescape_mountinfo(mount) == path)
+    table.iter().any(|mount| mount == path)
+}
+
+/// Every mount point in the mount table, read without touching the mounts
+/// themselves (a hung network mount would block a stat).
+#[cfg(target_os = "linux")]
+pub(super) fn mount_points() -> std::collections::HashSet<PathBuf> {
+    use std::os::unix::ffi::OsStringExt;
+    mount_table()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|mount| PathBuf::from(std::ffi::OsString::from_vec(mount)))
+        .collect()
+}
+
+/// The mount points in /proc/self/mountinfo, as raw bytes: a path need not be
+/// UTF-8, and one such mount must not hide all the others.
+#[cfg(target_os = "linux")]
+fn mount_table() -> Option<Vec<Vec<u8>>> {
+    #[allow(clippy::disallowed_methods)] // reason: procfs is in memory and never blocks
+    let table = std::fs::read("/proc/self/mountinfo").ok()?;
+    Some(
+        table
+            .split(|&b| b == b'\n')
+            .filter_map(|line| line.split(|&b| b == b' ').nth(4))
+            .map(unescape_mountinfo)
+            .collect(),
+    )
 }
 
 /// mountinfo writes space, tab, newline and backslash as `\ooo` octal escapes.
 #[cfg(target_os = "linux")]
-fn unescape_mountinfo(field: &str) -> Vec<u8> {
-    let bytes = field.as_bytes();
+fn unescape_mountinfo(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
@@ -315,8 +337,9 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn mountinfo_escapes_are_decoded() {
-        assert_eq!(unescape_mountinfo(r"/media/My\040Disk"), b"/media/My Disk");
-        assert_eq!(unescape_mountinfo(r"/a\134b\0"), b"/a\\b\\0");
+        assert_eq!(unescape_mountinfo(br"/media/My\040Disk"), b"/media/My Disk");
+        assert_eq!(unescape_mountinfo(br"/a\134b\0"), b"/a\\b\\0");
+        assert_eq!(unescape_mountinfo(b"/mnt/\xff"), b"/mnt/\xff");
     }
 
     #[cfg(not(windows))]
