@@ -2,7 +2,8 @@
 //! setting on Windows: the `inode/directory` handler in the user's
 //! `~/.config/mimeapps.list`, which GNOME, KDE, xdg-open and browsers ("Show in
 //! folder") follow. On puts Atlas first in that handler list and keeps the
-//! rest; off removes only Atlas from it, so the previous choice comes back.
+//! rest; off removes only Atlas from it, so the previous choice comes back
+//! when `GLib` could read it (a malformed entry it ignored becomes valid).
 // reason: one small config file read at startup and written on a settings change,
 // like util/config.rs; not the render hot path the sync-fs ban targets.
 #![allow(clippy::disallowed_methods)]
