@@ -405,6 +405,8 @@ fn parse_uri_list(list: &str) -> SmallVec<[std::path::PathBuf; 2]> {
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .filter_map(|line| Url::parse(line).ok())
+        // `to_file_path` ignores the scheme: Nautilus's Trash offers `trash:///a.txt`.
+        .filter(|url| url.scheme() == "file")
         .filter_map(|url| url.to_file_path().ok())
         .collect()
 }
@@ -474,7 +476,7 @@ mod tests {
     #[test]
     fn uri_list_parses_local_files_only() {
         let paths = parse_uri_list(
-            "# comment\r\nfile:///home/me/a%20b.txt\r\nhttps://example.com/x\r\n\r\nfile:///tmp/c\n",
+            "# comment\r\nfile:///home/me/a%20b.txt\r\nhttps://example.com/x\r\ntrash:///d.txt\r\nadmin:///etc/e\r\n\r\nfile:///tmp/c\n",
         );
         assert_eq!(
             paths.as_slice(),
