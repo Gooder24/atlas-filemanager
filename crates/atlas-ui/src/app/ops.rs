@@ -510,6 +510,8 @@ impl App {
     ) {
         // Only put local paths on the system clipboard (CF_HDROP / text/uri-list); remote paths
         // are virtual and have no meaning outside Atlas.
+        #[cfg_attr(not(unix), allow(unused_mut))]
+        let mut on_system_clipboard = false;
         if remote_id.is_none() {
             #[cfg(windows)]
             if let Err(e) = crate::dnd::windows::ole_clipboard::set_clipboard_files(
@@ -528,6 +530,7 @@ impl App {
                 let published = linux_clipboard::offer_files(&paths, is_cut, &uri_list);
                 #[cfg(not(target_os = "linux"))]
                 let published = false;
+                on_system_clipboard = published;
                 if let Ok(mut cb) = arboard::Clipboard::new() {
                     #[cfg(target_os = "linux")]
                     {
@@ -552,6 +555,7 @@ impl App {
             target_names,
             is_cut,
             remote_id,
+            on_system_clipboard,
         });
     }
 
@@ -587,23 +591,25 @@ impl App {
         #[cfg(not(windows))]
         let source = {
             let read = read_system_clipboard(|cb| {
-                let text = cb.get_text().ok();
+                let text = cb.get_text();
+                let mut answered = clipboard_answered(&text);
+                let text = text.ok();
                 let from_text = text.as_deref().and_then(|text| {
                     let (paths, ext_cut) = crate::dnd::parse_uri_list_with_cut(text);
                     (!paths.is_empty()).then_some((paths, ext_cut))
                 });
                 // Also check file_list in case the external app only exposed a URI list.
                 let files = from_text.or_else(|| {
-                    cb.get()
-                        .file_list()
-                        .ok()
+                    let list = cb.get().file_list();
+                    answered &= clipboard_answered(&list);
+                    list.ok()
                         .filter(|paths| !paths.is_empty())
                         .map(|paths| (paths, false))
                 });
-                Some((text, files))
+                Some((text, files, answered))
             });
             let timed_out = read.is_err();
-            let (sys_text, sys_files) = read.ok().flatten().unwrap_or_default();
+            let (sys_text, sys_files, readable) = read.ok().flatten().unwrap_or_default();
 
             match sys_files {
                 Some((sys_paths, ext_cut)) => {
@@ -633,14 +639,12 @@ impl App {
                     }
                 }
                 None => {
-                    let is_remote = self
-                        .state
-                        .ops
-                        .clipboard
-                        .as_ref()
-                        .and_then(|c| c.remote_id.as_ref())
-                        .is_some();
-                    if system_clipboard_replaced(timed_out, sys_text.as_deref()) && !is_remote {
+                    let internal = self.state.ops.clipboard.as_ref();
+                    let is_remote = internal.and_then(|c| c.remote_id.as_ref()).is_some();
+                    let offered = internal.is_some_and(|c| c.on_system_clipboard);
+                    if system_clipboard_replaced(timed_out, readable, sys_text.as_deref(), offered)
+                        && !is_remote
+                    {
                         self.state.ops.clipboard = None;
                     }
                     self.state.ops.clipboard.as_ref().map(|c| {
@@ -1072,10 +1076,27 @@ impl App {
 
 /// Whether something other than files now holds the system clipboard, so
 /// Atlas's own cut or copy is stale. A read that timed out counts: the usual
-/// owner that cannot answer is one of Atlas's own text inputs.
+/// owner that cannot answer is one of Atlas's own text inputs. When Atlas had
+/// `offered` its files on the clipboard itself, a clipboard that answered
+/// (`readable`) without files counts too: Atlas serves its offer until another
+/// app replaces it, so an empty clipboard means that app has quit and its
+/// content went with it. A read that failed for another reason is not
+/// `readable` and keeps the copy.
 #[cfg(not(windows))]
-fn system_clipboard_replaced(timed_out: bool, text: Option<&str>) -> bool {
-    timed_out || text.is_some_and(|text| !text.trim().is_empty())
+fn system_clipboard_replaced(
+    timed_out: bool,
+    readable: bool,
+    text: Option<&str>,
+    offered: bool,
+) -> bool {
+    timed_out || (readable && offered) || text.is_some_and(|text| !text.trim().is_empty())
+}
+
+/// The clipboard gave the content or said it holds none of that kind; any
+/// other error (the compositor did not answer) tells nothing about what it holds.
+#[cfg(not(windows))]
+const fn clipboard_answered<T>(read: &Result<T, arboard::Error>) -> bool {
+    !matches!(read, Err(e) if !matches!(e, arboard::Error::ContentNotAvailable))
 }
 
 /// The system clipboard did not answer in time (Linux only).
@@ -1242,10 +1263,37 @@ mod linux_clipboard {
         #[test]
         fn a_timed_out_or_text_clipboard_makes_the_internal_cut_stale() {
             use super::super::system_clipboard_replaced as replaced;
-            assert!(replaced(true, None));
-            assert!(replaced(false, Some("hello")));
-            assert!(!replaced(false, Some(" \n")));
-            assert!(!replaced(false, None));
+            assert!(replaced(true, false, None, false));
+            assert!(replaced(false, true, Some("hello"), false));
+            assert!(!replaced(false, true, Some(" \n"), false));
+            assert!(!replaced(false, true, None, false));
+        }
+
+        #[test]
+        fn an_empty_clipboard_makes_files_atlas_offered_stale() {
+            use super::super::system_clipboard_replaced as replaced;
+            // Another app took the clipboard over and quit: nothing is left.
+            assert!(replaced(false, true, None, true));
+            assert!(replaced(false, true, Some(""), true));
+            // Atlas never got its files onto the clipboard (X11, no
+            // data-control): its own copy is all there is.
+            assert!(!replaced(false, true, None, false));
+            // The clipboard could not be opened: no evidence either way.
+            assert!(!replaced(false, false, None, true));
+        }
+
+        #[test]
+        fn only_an_answer_counts_as_an_empty_clipboard() {
+            use super::super::clipboard_answered as answered;
+            assert!(answered(&Ok::<String, _>("text".into())));
+            assert!(answered(&Err::<String, _>(
+                arboard::Error::ContentNotAvailable
+            )));
+            assert!(!answered(&Err::<Vec<PathBuf>, _>(
+                arboard::Error::Unknown {
+                    description: "compositor gone".into()
+                }
+            )));
         }
 
         #[test]
