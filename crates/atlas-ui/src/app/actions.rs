@@ -1892,6 +1892,13 @@ impl App {
             return;
         }
         let text = atlas_core::util::display::clipboard_path_text(paths);
+        #[cfg(target_os = "linux")]
+        if self.clipboard_through_gpui() {
+            self.queue_os_clipboard(crate::app::ops::OsClipboardOp::Write(
+                gpui::ClipboardItem::new_string(text),
+            ));
+            return;
+        }
         if let Ok(mut cb) = arboard::Clipboard::new() {
             let _ = cb.set_text(text.clone());
             #[cfg(target_os = "linux")]
