@@ -5,6 +5,23 @@ Write user-facing release notes here. Release headings use
 
 ## [Unreleased]
 
+## [0.1.6-beta.4] - 2026-11-21
+
+### Fixed
+
+- File dates (Details, inspector, tooltips, transfer conflicts) now show your local time instead of UTC.
+- Removing a cloud account works even when its provider extension cannot start (for example when an antivirus blocks it).
+- Linux: copying and pasting files with other apps works on Wayland, including GNOME, and no longer pastes a stale copy after the source app quits.
+- Linux: Drives lists each disk once, including Fedora Atomic; the search index stays current; private folders open as a folder; disk cleanup is available; "Open Recycle Bin" is in the palette and Go to.
+- Crash report commands are hidden where they do nothing.
+
+### New
+
+- Linux: a setting to make Atlas the default file manager.
+- Linux: Nix flake to build and run Atlas on NixOS; release binaries are stripped with symbols shipped separately.
+
+Thanks to @Gooder24 for the Linux contributions in this release.
+
 ## [0.1.6-beta.3] - 2026-11-14
 
 ### Fixed
