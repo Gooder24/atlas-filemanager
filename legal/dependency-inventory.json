@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "target": "x86_64-pc-windows-msvc",
-  "cargoLockSha256": "2671b83165cbb6742df92fc9915a35ec3f255ce68f442b05e456913985f079ef",
+  "cargoLockSha256": "50ab280072e59034e3b6e19521d8103c74dfed79e7ef559668c8a95246295868",
   "coverage": "All-feature workspace metadata, default Windows release graph, installed locked web packages, and explicit bundled resources. Build/development entries may not be shipped.",
   "packages": [
     {
@@ -25876,7 +25876,7 @@
   "missingNotices": [],
   "textCount": 830,
   "inputHashes": {
-    "Cargo.lock": "2671b83165cbb6742df92fc9915a35ec3f255ce68f442b05e456913985f079ef",
+    "Cargo.lock": "50ab280072e59034e3b6e19521d8103c74dfed79e7ef559668c8a95246295868",
     "website/package-lock.json": "a3740821fbb957404109dc68a8181eae3539e0731807275938980e83881da6a1",
     "legal/assets.json": "45453c75246950f041847d118ddc736157ba51ae4a6dda856c89545554fa3462",
     "legal/notice-overrides.json": "d01d66e5d26f1e4116d3c4d6519bfebb005ff995becfe43229e6c172ff231088"
