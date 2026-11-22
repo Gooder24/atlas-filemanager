@@ -108,10 +108,14 @@ impl App {
         self.multi_res_icon(&icon_key(kind, ext))
     }
 
-    /// Resolve `(kind, ext)` to default Icons8 Liquid Glass texture.
-    pub(crate) fn liquid_glass_icon(&self, kind: &FileKind, ext: Option<&str>) -> Arc<RenderImage> {
+    /// Resolve `(kind, ext)` to default Icons8 Liquid Glass mip tiers.
+    pub(crate) fn liquid_glass_icon(
+        &self,
+        kind: &FileKind,
+        ext: Option<&str>,
+    ) -> Arc<MultiResIcon> {
         self.liquid_glass
-            .texture_for_entry_on(kind, ext, self.light_surfaces)
+            .multi_for_entry_on(kind, ext, self.light_surfaces)
     }
 }
 

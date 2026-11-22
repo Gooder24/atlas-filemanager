@@ -2364,7 +2364,8 @@ impl App {
                                     .into_any_element(),
                                 // Cache variant follows light/dark surfaces.
                                 None => gpui::img(
-                                    self.liquid_glass_icon(&row_kind, e.extension.as_deref()),
+                                    self.liquid_glass_icon(&row_kind, e.extension.as_deref())
+                                        .for_size(14.0),
                                 )
                                 .w(px(14.))
                                 .h(px(14.))

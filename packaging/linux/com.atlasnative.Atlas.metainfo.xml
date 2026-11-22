@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component type="desktop-application">
+  <id>com.atlasnative.Atlas</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Atlas</name>
+  <summary>Fast, GPU-accelerated modern file manager</summary>
+  <summary xml:lang="es">Administrador de archivos moderno y acelerado por GPU</summary>
+  <summary xml:lang="de">Schneller, GPU-beschleunigter moderner Dateimanager</summary>
+  <summary xml:lang="fr">Gestionnaire de fichiers moderne et rapide accéléré par GPU</summary>
+  <summary xml:lang="it">Gestore di file moderno e veloce con accelerazione GPU</summary>
+  <summary xml:lang="ja">GPU アクセラレーション対応の高速でモダンなファイルマネージャー</summary>
+  <summary xml:lang="ko">GPU 가속을 지원하는 빠르고 현대적인 파일 관리자</summary>
+  <summary xml:lang="nl">Snelle, GPU-versnelde moderne bestandsbeheerder</summary>
+  <summary xml:lang="pl">Szybki, nowoczesny menedżer plików z akceleracją GPU</summary>
+  <summary xml:lang="pt_BR">Gerenciador de arquivos moderno e rápido com aceleração por GPU</summary>
+  <summary xml:lang="ru">Быстрый современный файловый менеджер с аппаратным ускорением GPU</summary>
+  <summary xml:lang="sv">Snabb, GPU-accelererad modern filhanterare</summary>
+  <summary xml:lang="tr">GPU hızlandırmalı hızlı ve modern dosya yöneticisi</summary>
+  <summary xml:lang="uk">Швидкий сучасний файловий менеджер із прискоренням GPU</summary>
+  <summary xml:lang="vi">Trình quản lý tệp hiện đại, nhanh chóng với tăng tốc GPU</summary>
+  <summary xml:lang="zh_CN">支持 GPU 加速的高性能现代化文件管理器</summary>
+  <summary xml:lang="zh_TW">支援 GPU 加速的高效能現代化檔案管理員</summary>
+  <description>
+    <p>Atlas is a high-performance modern file manager built with Rust and GPU acceleration. It features tabs, split panes, instant search, in-line previews, and quick file conversions.</p>
+    <p xml:lang="es">Atlas es un administrador de archivos moderno y de alto rendimiento creado con Rust y aceleración por GPU. Cuenta con pestañas, paneles divididos, búsqueda instantánea, vistas previas y conversiones rápidas.</p>
+    <p xml:lang="de">Atlas ist ein moderner Hochleistungs-Dateimanager mit Rust und GPU-Beschleunigung. Er bietet Tabs, geteilte Ansichten, Sofortsuche, integrierte Dateivorschau und schnelle Dateikonvertierung.</p>
+    <p xml:lang="fr">Atlas est un gestionnaire de fichiers moderne et performant conçu en Rust avec accélération GPU. Il propose des onglets, des volets côte à côte, une recherche instantanée et des aperçus de fichiers.</p>
+    <p xml:lang="zh_CN">Atlas 是一款采用 Rust 开发并支持 GPU 加速的高性能现代化文件管理器。它提供标签页、分栏视图、即时子目录搜索、多格式即时预览和快速文件转换功能。</p>
+    <ul>
+      <li>Tabs and split panes, side by side, each with independent views and history</li>
+      <li>Instant search across a folder and all of its subfolders</li>
+      <li>In-line previews for images, PDFs, Markdown, text, audio and code</li>
+      <li>Format conversion ring for images, audio and document formats</li>
+      <li>Open ZIP archives like normal folders with instant preview</li>
+      <li>Remote and cloud integrations: Google Drive, OneDrive, SFTP, FTP, WebDAV and SMB</li>
+      <li>Complete command palette (Ctrl+Shift+P) and customizable keyboard shortcuts</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">atlas.desktop</launchable>
+  <url type="homepage">https://atlasnative.com</url>
+  <url type="bugtracker">https://github.com/neondeex/atlas-filemanager/issues</url>
+  <url type="vcs-browser">https://github.com/neondeex/atlas-filemanager</url>
+  <developer_name>NeonDeex</developer_name>
+  <project_group>Atlas</project_group>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-01-split.png</image>
+      <caption>Tabs and split panes, side by side.</caption>
+      <caption xml:lang="es">Pestañas y paneles divididos, lado a lado.</caption>
+      <caption xml:lang="de">Tabs und geteilte Ansichten nebeneinander.</caption>
+      <caption xml:lang="fr">Onglets et volets côte à côte.</caption>
+      <caption xml:lang="it">Schede e pannelli affiancati.</caption>
+      <caption xml:lang="ja">タブと分割ペインを並べて表示。</caption>
+      <caption xml:lang="ko">탭과 분할 창을 나란히.</caption>
+      <caption xml:lang="nl">Tabbladen en gesplitste panelen naast elkaar.</caption>
+      <caption xml:lang="pl">Karty i panele obok siebie.</caption>
+      <caption xml:lang="pt_BR">Abas e painéis lado a lado.</caption>
+      <caption xml:lang="ru">Вкладки и панели рядом.</caption>
+      <caption xml:lang="sv">Flikar och delade paneler sida vid sida.</caption>
+      <caption xml:lang="tr">Yan yana sekmeler ve paneller.</caption>
+      <caption xml:lang="uk">Вкладки й панелі поруч.</caption>
+      <caption xml:lang="vi">Tab và khung chia cạnh nhau.</caption>
+      <caption xml:lang="zh_CN">标签页和分栏并排显示。</caption>
+      <caption xml:lang="zh_TW">分頁和分割窗格並排顯示。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-02-search.png</image>
+      <caption>Search a folder and all of its subfolders.</caption>
+      <caption xml:lang="es">Busca en una carpeta y en todas sus subcarpetas.</caption>
+      <caption xml:lang="de">Einen Ordner und alle Unterordner durchsuchen.</caption>
+      <caption xml:lang="fr">Recherche dans un dossier et tous ses sous-dossiers.</caption>
+      <caption xml:lang="it">Ricerca in una cartella e in tutte le sottocartelle.</caption>
+      <caption xml:lang="ja">フォルダーとすべてのサブフォルダーを検索。</caption>
+      <caption xml:lang="ko">폴더와 모든 하위 폴더 검색.</caption>
+      <caption xml:lang="nl">Zoeken in een map en alle submappen.</caption>
+      <caption xml:lang="pl">Wyszukiwanie w folderze i wszystkich podfolderach.</caption>
+      <caption xml:lang="pt_BR">Pesquise em uma pasta e em todas as subpastas.</caption>
+      <caption xml:lang="ru">Поиск в папке и всех подпапках.</caption>
+      <caption xml:lang="sv">Sök i en mapp och alla undermappar.</caption>
+      <caption xml:lang="tr">Bir klasörde ve tüm alt klasörlerde arama.</caption>
+      <caption xml:lang="uk">Пошук у папці та всіх підпапках.</caption>
+      <caption xml:lang="vi">Tìm trong thư mục và mọi thư mục con.</caption>
+      <caption xml:lang="zh_CN">在文件夹及其所有子文件夹中搜索。</caption>
+      <caption xml:lang="zh_TW">在資料夾及其所有子資料夾中搜尋。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-03-preview-img.png</image>
+      <caption>Preview files beside the folder.</caption>
+      <caption xml:lang="es">Vista previa de archivos junto a la carpeta.</caption>
+      <caption xml:lang="de">Dateivorschau direkt neben dem Ordner.</caption>
+      <caption xml:lang="fr">Aperçu des fichiers à côté du dossier.</caption>
+      <caption xml:lang="it">Anteprima dei file accanto alla cartella.</caption>
+      <caption xml:lang="ja">フォルダーの横でファイルをプレビュー。</caption>
+      <caption xml:lang="ko">폴더 옆에서 파일 미리 보기.</caption>
+      <caption xml:lang="nl">Bestandsvoorbeeld naast de map.</caption>
+      <caption xml:lang="pl">Podgląd plików obok folderu.</caption>
+      <caption xml:lang="pt_BR">Prévia de arquivos ao lado da pasta.</caption>
+      <caption xml:lang="ru">Предпросмотр файлов рядом с папкой.</caption>
+      <caption xml:lang="sv">Förhandsvisa filer bredvid mappen.</caption>
+      <caption xml:lang="tr">Klasörün yanında dosya önizleme.</caption>
+      <caption xml:lang="uk">Перегляд файлів поруч із папкою.</caption>
+      <caption xml:lang="vi">Xem trước tệp bên cạnh thư mục.</caption>
+      <caption xml:lang="zh_CN">在文件夹旁预览文件。</caption>
+      <caption xml:lang="zh_TW">在資料夾旁預覽檔案。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-04-convert.png</image>
+      <caption>Convert files from a format ring.</caption>
+      <caption xml:lang="es">Convierte archivos desde un anillo de formatos.</caption>
+      <caption xml:lang="de">Dateien über einen Formatring konvertieren.</caption>
+      <caption xml:lang="fr">Conversion depuis un anneau de formats.</caption>
+      <caption xml:lang="it">Conversione da un anello di formati.</caption>
+      <caption xml:lang="ja">形式リングからファイルを変換。</caption>
+      <caption xml:lang="ko">형식 링에서 파일 변환.</caption>
+      <caption xml:lang="nl">Bestanden converteren vanuit een formaatring.</caption>
+      <caption xml:lang="pl">Konwersja z pierścienia formatów.</caption>
+      <caption xml:lang="pt_BR">Converta arquivos a partir de um anel de formatos.</caption>
+      <caption xml:lang="ru">Конвертация через кольцо форматов.</caption>
+      <caption xml:lang="sv">Konvertera filer från en formatring.</caption>
+      <caption xml:lang="tr">Biçim halkasından dosya dönüştürme.</caption>
+      <caption xml:lang="uk">Перетворення через кільце форматів.</caption>
+      <caption xml:lang="vi">Chuyển đổi tệp từ vòng định dạng.</caption>
+      <caption xml:lang="zh_CN">从格式环中转换文件。</caption>
+      <caption xml:lang="zh_TW">從格式環中轉換檔案。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-05-palette.png</image>
+      <caption>Find any command with Ctrl+Shift+P.</caption>
+      <caption xml:lang="es">Encuentra cualquier comando con Ctrl+Shift+P.</caption>
+      <caption xml:lang="de">Jeden Befehl mit Strg+Umschalt+P finden.</caption>
+      <caption xml:lang="fr">Toutes les commandes avec Ctrl+Maj+P.</caption>
+      <caption xml:lang="it">Ogni comando con Ctrl+Maiusc+P.</caption>
+      <caption xml:lang="ja">Ctrl+Shift+P ですべてのコマンドを検索。</caption>
+      <caption xml:lang="ko">Ctrl+Shift+P로 모든 명령 찾기.</caption>
+      <caption xml:lang="nl">Elke opdracht met Ctrl+Shift+P.</caption>
+      <caption xml:lang="pl">Każde polecenie przez Ctrl+Shift+P.</caption>
+      <caption xml:lang="pt_BR">Encontre qualquer comando com Ctrl+Shift+P.</caption>
+      <caption xml:lang="ru">Любая команда через Ctrl+Shift+P.</caption>
+      <caption xml:lang="sv">Hitta alla kommandon med Ctrl+Skift+P.</caption>
+      <caption xml:lang="tr">Ctrl+Shift+P ile her komutu bulun.</caption>
+      <caption xml:lang="uk">Будь-яка команда через Ctrl+Shift+P.</caption>
+      <caption xml:lang="vi">Tìm mọi lệnh bằng Ctrl+Shift+P.</caption>
+      <caption xml:lang="zh_CN">按 Ctrl+Shift+P 查找任意命令。</caption>
+      <caption xml:lang="zh_TW">按 Ctrl+Shift+P 尋找任何命令。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-06-tree.png</image>
+      <caption>Details, grid, list, column and tree views.</caption>
+      <caption xml:lang="es">Vistas de detalles, cuadrícula, lista, columnas y árbol.</caption>
+      <caption xml:lang="de">Detail-, Raster-, Listen-, Spalten- und Baumansicht.</caption>
+      <caption xml:lang="fr">Vues détails, grille, liste, colonnes et arborescence.</caption>
+      <caption xml:lang="it">Viste dettagli, griglia, elenco, colonne e albero.</caption>
+      <caption xml:lang="ja">詳細、グリッド、リスト、カラム、ツリー表示。</caption>
+      <caption xml:lang="ko">자세히, 격자, 목록, 열, 트리 보기.</caption>
+      <caption xml:lang="nl">Detail-, raster-, lijst-, kolom- en boomweergave.</caption>
+      <caption xml:lang="pl">Widoki szczegółów, siatki, listy, kolumn i drzewa.</caption>
+      <caption xml:lang="pt_BR">Visualizações de detalhes, grade, lista, colunas e árvore.</caption>
+      <caption xml:lang="ru">Виды таблицы, сетки, списка, колонок и дерева.</caption>
+      <caption xml:lang="sv">Detalj-, rutnäts-, list-, kolumn- och trädvy.</caption>
+      <caption xml:lang="tr">Ayrıntı, ızgara, liste, sütun ve ağaç görünümleri.</caption>
+      <caption xml:lang="uk">Вигляди таблиці, сітки, списку, стовпців і дерева.</caption>
+      <caption xml:lang="vi">Chế độ xem chi tiết, lưới, danh sách, cột và cây.</caption>
+      <caption xml:lang="zh_CN">详细信息、网格、列表、分栏和树状视图。</caption>
+      <caption xml:lang="zh_TW">詳細資料、格狀、清單、直欄和樹狀檢視。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-07-archive.png</image>
+      <caption>Open ZIP archives like folders.</caption>
+      <caption xml:lang="es">Abre archivos ZIP como carpetas.</caption>
+      <caption xml:lang="de">ZIP-Archive wie Ordner öffnen.</caption>
+      <caption xml:lang="fr">Archives ZIP ouvertes comme des dossiers.</caption>
+      <caption xml:lang="it">Archivi ZIP aperti come cartelle.</caption>
+      <caption xml:lang="ja">ZIP アーカイブをフォルダーのように開く。</caption>
+      <caption xml:lang="ko">ZIP 압축 파일을 폴더처럼 열기.</caption>
+      <caption xml:lang="nl">ZIP-archieven openen als mappen.</caption>
+      <caption xml:lang="pl">Archiwa ZIP otwierane jak foldery.</caption>
+      <caption xml:lang="pt_BR">Abra arquivos ZIP como pastas.</caption>
+      <caption xml:lang="ru">ZIP-архивы открываются как папки.</caption>
+      <caption xml:lang="sv">Öppna ZIP-arkiv som mappar.</caption>
+      <caption xml:lang="tr">ZIP arşivlerini klasör gibi açın.</caption>
+      <caption xml:lang="uk">ZIP-архіви відкриваються як папки.</caption>
+      <caption xml:lang="vi">Mở tệp ZIP như thư mục.</caption>
+      <caption xml:lang="zh_CN">像文件夹一样打开 ZIP 压缩包。</caption>
+      <caption xml:lang="zh_TW">像資料夾一樣開啟 ZIP 壓縮檔。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-08-cloud.png</image>
+      <caption>Connect servers and cloud drives.</caption>
+      <caption xml:lang="es">Conecta servidores y unidades en la nube.</caption>
+      <caption xml:lang="de">Server und Cloud-Laufwerke verbinden.</caption>
+      <caption xml:lang="fr">Connexion aux serveurs et au cloud.</caption>
+      <caption xml:lang="it">Connessione a server e unità cloud.</caption>
+      <caption xml:lang="ja">サーバーとクラウドドライブに接続。</caption>
+      <caption xml:lang="ko">서버와 클라우드 드라이브 연결.</caption>
+      <caption xml:lang="nl">Servers en clouddrives verbinden.</caption>
+      <caption xml:lang="pl">Połączenia z serwerami i chmurą.</caption>
+      <caption xml:lang="pt_BR">Conecte servidores e unidades na nuvem.</caption>
+      <caption xml:lang="ru">Подключение серверов и облачных дисков.</caption>
+      <caption xml:lang="sv">Anslut servrar och molnenheter.</caption>
+      <caption xml:lang="tr">Sunuculara ve bulut sürücülerine bağlanın.</caption>
+      <caption xml:lang="uk">Підключення серверів і хмарних дисків.</caption>
+      <caption xml:lang="vi">Kết nối máy chủ và ổ đĩa đám mây.</caption>
+      <caption xml:lang="zh_CN">连接服务器和云盘。</caption>
+      <caption xml:lang="zh_TW">連線至伺服器和雲端磁碟。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-09-theme.png</image>
+      <caption>Themes with live preview.</caption>
+      <caption xml:lang="es">Temas con vista previa en vivo.</caption>
+      <caption xml:lang="de">Designs mit Live-Vorschau.</caption>
+      <caption xml:lang="fr">Thèmes avec aperçu en direct.</caption>
+      <caption xml:lang="it">Temi con anteprima in tempo reale.</caption>
+      <caption xml:lang="ja">ライブプレビュー付きのテーマ。</caption>
+      <caption xml:lang="ko">실시간 미리 보기 테마.</caption>
+      <caption xml:lang="nl">Thema’s met live voorbeeld.</caption>
+      <caption xml:lang="pl">Motywy z podglądem na żywo.</caption>
+      <caption xml:lang="pt_BR">Temas com prévia ao vivo.</caption>
+      <caption xml:lang="ru">Темы с предпросмотром.</caption>
+      <caption xml:lang="sv">Teman med direkt förhandsvisning.</caption>
+      <caption xml:lang="tr">Canlı önizlemeli temalar.</caption>
+      <caption xml:lang="uk">Теми з попереднім переглядом.</caption>
+      <caption xml:lang="vi">Giao diện với xem trước trực tiếp.</caption>
+      <caption xml:lang="zh_CN">支持实时预览的主题。</caption>
+      <caption xml:lang="zh_TW">支援即時預覽的佈景主題。</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-10-settings.png</image>
+      <caption>Searchable settings, including Win+E.</caption>
+      <caption xml:lang="es">Ajustes con búsqueda, incluido Win+E.</caption>
+      <caption xml:lang="de">Durchsuchbare Einstellungen, auch für Win+E.</caption>
+      <caption xml:lang="fr">Paramètres consultables, y compris Win+E.</caption>
+      <caption xml:lang="it">Impostazioni con ricerca, incluso Win+E.</caption>
+      <caption xml:lang="ja">Win+E を含む検索できる設定。</caption>
+      <caption xml:lang="ko">Win+E를 포함한 검색 가능한 설정.</caption>
+      <caption xml:lang="nl">Doorzoekbare instellingen, ook voor Win+E.</caption>
+      <caption xml:lang="pl">Ustawienia z wyszukiwaniem, także Win+E.</caption>
+      <caption xml:lang="pt_BR">Configurações pesquisáveis, incluindo Win+E.</caption>
+      <caption xml:lang="ru">Поиск по настройкам, включая Win+E.</caption>
+      <caption xml:lang="sv">Sökbara inställningar, även Win+E.</caption>
+      <caption xml:lang="tr">Win+E dahil aranabilir ayarlar.</caption>
+      <caption xml:lang="uk">Пошук у налаштуваннях, зокрема Win+E.</caption>
+      <caption xml:lang="vi">Cài đặt có thể tìm kiếm, gồm cả Win+E.</caption>
+      <caption xml:lang="zh_CN">可搜索的设置，包括 Win+E。</caption>
+      <caption xml:lang="zh_TW">可搜尋的設定，包括 Win+E。</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.1.6-beta.2" date="2026-11-13">
+      <url>https://github.com/neondeex/atlas-filemanager/releases/tag/v0.1.6-beta.2</url>
+      <description>
+        <p>Atlas 0.1.6-beta.2 introduces session save on window close, improved drag and drop for unselected files, sort commands in the command palette, and address bar preview toggles.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>atlas</binary>
+  </provides>
+</component>
