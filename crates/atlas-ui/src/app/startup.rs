@@ -527,6 +527,10 @@ impl App {
                 let alive = this
                     .update(cx, |app, cx| {
                         let mut dirty = app.drain_bg_results(cx);
+                        #[cfg(target_os = "linux")]
+                        {
+                            dirty |= app.flush_os_clipboard(cx);
+                        }
                         dirty |= app.tick_ctx_input_blink();
                         dirty |= app.tick_batch_blink(cx);
                         // Drive matching only until this query's snapshot is ready;
@@ -624,6 +628,10 @@ impl App {
             startup_started,
             startup_first_render_logged: false,
             close_after_tab_transfer: false,
+            #[cfg(target_os = "linux")]
+            is_wayland: cx.compositor_name() == "Wayland",
+            #[cfg(target_os = "linux")]
+            os_clipboard_ops: Vec::new(),
             crash_report_sent: false,
             #[cfg(windows)]
             pending_tab_restore,
@@ -771,7 +779,7 @@ impl App {
             converter: None,
             cleanup_panel: None,
             vault: None,
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             vault_mount: None,
             ctx_menu: None,
             ctx_menu_seq: 0,
@@ -824,6 +832,8 @@ impl App {
             typed_selection: None,
             #[cfg(windows)]
             win_e_enabled: atlas_win_space::integration::win_e_enabled().unwrap_or(false),
+            #[cfg(target_os = "linux")]
+            win_e_enabled: atlas_core::fs::default_file_manager::is_default(),
             preview_delay: Default::default(),
             details_column_order: details_prefs.order,
             col_resize: None,

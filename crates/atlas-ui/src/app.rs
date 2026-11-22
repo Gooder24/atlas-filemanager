@@ -33,7 +33,7 @@ pub(crate) mod vault;
 
 pub struct App {
     pub(crate) vault: Option<vault::Dialog>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub(crate) vault_mount: Option<atlas_core::vault::mount::Mounted>,
     pub(crate) converter: Option<crate::ui::converter::Session>,
     pub(crate) cleanup_panel: Option<Entity<crate::ui::cleanup::CleanupPanel>>,
@@ -43,6 +43,11 @@ pub struct App {
     pub(crate) startup_started: Instant,
     pub(crate) startup_first_render_logged: bool,
     pub(crate) close_after_tab_transfer: bool,
+    /// gpui runs on Wayland (see `clipboard_through_gpui`).
+    #[cfg(target_os = "linux")]
+    pub(crate) is_wayland: bool,
+    #[cfg(target_os = "linux")]
+    pub(crate) os_clipboard_ops: Vec<ops::OsClipboardOp>,
     /// The previous crash's report was uploaded (or is uploading) this session.
     pub(crate) crash_report_sent: bool,
     #[cfg(windows)]
@@ -424,7 +429,8 @@ pub struct App {
     /// Details-view column widths, shared across all panes.
     pub(crate) col_widths: ColWidths,
     pub(crate) typed_selection: Option<(atlas_model::pane::TabId, String, Instant)>,
-    #[cfg(windows)]
+    /// Windows: Win+E opens Atlas. Linux: Atlas is the default file manager.
+    #[cfg(any(windows, target_os = "linux"))]
     pub(crate) win_e_enabled: bool,
     /// User-facing order for Details metadata columns. Name stays fixed first.
     pub(crate) details_column_order: [DetailsColumn; 3],

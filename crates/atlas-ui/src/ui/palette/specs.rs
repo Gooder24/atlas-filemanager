@@ -1433,7 +1433,7 @@ impl App {
             p.map(|p| goto_entry(label.to_string(), p, ic, true, tab, pane))
         })
         .collect();
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         {
             let mut recycle_bin = PaletteItem::new(
                 rust_i18n::t!("cmd_nav_recycle_bin_title").to_string(),
@@ -2050,7 +2050,7 @@ impl App {
                 AtlasIcon::ArrowClockwise,
                 Action::Refresh(focused),
             ),
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
             CommandDef::new(
                 "nav.recycle-bin",
                 rust_i18n::t!("cmd_nav_recycle_bin_title"),
@@ -2985,6 +2985,8 @@ impl App {
                 AtlasIcon::Lock,
                 Action::DeactivateLicense,
             ),
+            // Crash reports are collected only on Windows (atlas-win-space).
+            #[cfg(windows)]
             CommandDef::new(
                 "sys.crash-reports",
                 rust_i18n::t!("cmd_sys_crash_reports_title"),
@@ -2992,6 +2994,7 @@ impl App {
                 AtlasIcon::Lifebuoy,
                 Action::OpenCrashReports,
             ),
+            #[cfg(windows)]
             CommandDef::new(
                 "sys.send-crash-report",
                 rust_i18n::t!("cmd_sys_send_crash_report_title"),
