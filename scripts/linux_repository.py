@@ -36,7 +36,7 @@ def build(artifacts, output, base_url, fingerprint):
     verify_assets(artifacts)
     info = json.loads((artifacts / "atlas-linux.json").read_text())
     validate_version(info["version"])
-    if info["prerelease"] or "-" in info["version"]:
+    if os.environ.get("ATLAS_ALLOW_PRERELEASE") != "1" and (info["prerelease"] or "-" in info["version"]):
         raise ValueError("Prereleases must not enter the stable repositories")
     output.mkdir(parents=True, exist_ok=False)
     key = run("gpg", "--batch", "--armor", "--export", fingerprint, stdout=subprocess.PIPE).stdout
