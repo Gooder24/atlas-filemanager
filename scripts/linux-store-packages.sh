@@ -51,7 +51,7 @@ case "$format" in
         cp "/usr/share/doc/$owner/copyright" "$scratch/snap/usr/share/doc/$owner/"
       fi
     done < <(for binary in "$payload/bin/"*; do ldd "$binary"; done | awk '$2 == "=>" && $3 ~ /^\// {print $3}' | sort -u)
-    cp -a /usr/share/common-licenses "$scratch/snap/usr/share/"
+    [[ -d /usr/share/common-licenses ]] && cp -a /usr/share/common-licenses "$scratch/snap/usr/share/" || true
     cat > "$scratch/snap/meta/snap.yaml" <<EOF
 name: atlas-filemanager
 version: '$version'
