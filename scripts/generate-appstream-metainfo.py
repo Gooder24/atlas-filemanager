@@ -105,11 +105,12 @@ ET.SubElement(root, 'launchable', {'type': 'desktop-id'}).text = 'atlas.desktop'
 ET.SubElement(root, 'url', {'type': 'homepage'}).text = 'https://atlasnative.com'
 ET.SubElement(root, 'url', {'type': 'bugtracker'}).text = 'https://github.com/neondeex/atlas-filemanager/issues'
 ET.SubElement(root, 'url', {'type': 'vcs-browser'}).text = 'https://github.com/neondeex/atlas-filemanager'
-ET.SubElement(root, 'developer_name').text = 'NeonDeex'
+dev_el = ET.SubElement(root, 'developer', {'id': 'io.github.neondeex'})
+ET.SubElement(dev_el, 'name').text = 'NeonDeex'
 ET.SubElement(root, 'project_group').text = 'Atlas'
 
 screenshots_el = ET.SubElement(root, 'screenshots')
-base_url = "https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/"
+base_url = "https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/"
 
 for idx, (filename, is_default) in enumerate(screenshot_files):
     attrs = {'type': 'default'} if is_default else {}
@@ -126,6 +127,11 @@ for idx, (filename, is_default) in enumerate(screenshot_files):
                 ET.SubElement(s_el, 'caption', {'xml:lang': lang_code}).text = cap_text
 
 releases_el = ET.SubElement(root, 'releases')
+rel_el4 = ET.SubElement(releases_el, 'release', {'version': '0.1.6-beta.4', 'date': '2026-11-21'})
+ET.SubElement(rel_el4, 'url').text = 'https://github.com/neondeex/atlas-filemanager/releases/tag/v0.1.6-beta.4'
+rel_desc4 = ET.SubElement(rel_el4, 'description')
+ET.SubElement(rel_desc4, 'p').text = 'File dates now show in local time, improved Linux Wayland clipboard support, multi-disk listing deduplication, and setting to make Atlas default file manager.'
+
 rel_el = ET.SubElement(releases_el, 'release', {'version': '0.1.6-beta.2', 'date': '2026-11-13'})
 ET.SubElement(rel_el, 'url').text = 'https://github.com/neondeex/atlas-filemanager/releases/tag/v0.1.6-beta.2'
 rel_desc = ET.SubElement(rel_el, 'description')
@@ -147,6 +153,7 @@ print(f"Generated {out_path} ({len(pretty_xml)} bytes)")
 # Also output the canonical GitHub-namespaced ID required for zero-friction Flathub submission
 root_io = ET.fromstring(xml_str)
 root_io.find('id').text = 'io.github.neondeex.atlas-filemanager'
+root_io.find('launchable').text = 'io.github.neondeex.atlas-filemanager.desktop'
 parsed_io = minidom.parseString(ET.tostring(root_io, encoding='utf-8'))
 pretty_io = parsed_io.toprettyxml(indent='  ', encoding='utf-8')
 out_io = repo / 'packaging/linux/io.github.neondeex.atlas-filemanager.metainfo.xml'

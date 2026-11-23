@@ -41,11 +41,13 @@
   <url type="homepage">https://atlasnative.com</url>
   <url type="bugtracker">https://github.com/neondeex/atlas-filemanager/issues</url>
   <url type="vcs-browser">https://github.com/neondeex/atlas-filemanager</url>
-  <developer_name>NeonDeex</developer_name>
+  <developer id="io.github.neondeex">
+    <name>NeonDeex</name>
+  </developer>
   <project_group>Atlas</project_group>
   <screenshots>
     <screenshot type="default">
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-01-split.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-01-split.png</image>
       <caption>Tabs and split panes, side by side.</caption>
       <caption xml:lang="es">Pestañas y paneles divididos, lado a lado.</caption>
       <caption xml:lang="de">Tabs und geteilte Ansichten nebeneinander.</caption>
@@ -65,7 +67,7 @@
       <caption xml:lang="zh_TW">分頁和分割窗格並排顯示。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-02-search.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-02-search.png</image>
       <caption>Search a folder and all of its subfolders.</caption>
       <caption xml:lang="es">Busca en una carpeta y en todas sus subcarpetas.</caption>
       <caption xml:lang="de">Einen Ordner und alle Unterordner durchsuchen.</caption>
@@ -85,7 +87,7 @@
       <caption xml:lang="zh_TW">在資料夾及其所有子資料夾中搜尋。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-03-preview-img.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-03-preview-img.png</image>
       <caption>Preview files beside the folder.</caption>
       <caption xml:lang="es">Vista previa de archivos junto a la carpeta.</caption>
       <caption xml:lang="de">Dateivorschau direkt neben dem Ordner.</caption>
@@ -105,7 +107,7 @@
       <caption xml:lang="zh_TW">在資料夾旁預覽檔案。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-04-convert.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-04-convert.png</image>
       <caption>Convert files from a format ring.</caption>
       <caption xml:lang="es">Convierte archivos desde un anillo de formatos.</caption>
       <caption xml:lang="de">Dateien über einen Formatring konvertieren.</caption>
@@ -125,7 +127,7 @@
       <caption xml:lang="zh_TW">從格式環中轉換檔案。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-05-palette.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-05-palette.png</image>
       <caption>Find any command with Ctrl+Shift+P.</caption>
       <caption xml:lang="es">Encuentra cualquier comando con Ctrl+Shift+P.</caption>
       <caption xml:lang="de">Jeden Befehl mit Strg+Umschalt+P finden.</caption>
@@ -145,7 +147,7 @@
       <caption xml:lang="zh_TW">按 Ctrl+Shift+P 尋找任何命令。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-06-tree.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-06-tree.png</image>
       <caption>Details, grid, list, column and tree views.</caption>
       <caption xml:lang="es">Vistas de detalles, cuadrícula, lista, columnas y árbol.</caption>
       <caption xml:lang="de">Detail-, Raster-, Listen-, Spalten- und Baumansicht.</caption>
@@ -165,7 +167,7 @@
       <caption xml:lang="zh_TW">詳細資料、格狀、清單、直欄和樹狀檢視。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-07-archive.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-07-archive.png</image>
       <caption>Open ZIP archives like folders.</caption>
       <caption xml:lang="es">Abre archivos ZIP como carpetas.</caption>
       <caption xml:lang="de">ZIP-Archive wie Ordner öffnen.</caption>
@@ -185,7 +187,7 @@
       <caption xml:lang="zh_TW">像資料夾一樣開啟 ZIP 壓縮檔。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-08-cloud.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-08-cloud.png</image>
       <caption>Connect servers and cloud drives.</caption>
       <caption xml:lang="es">Conecta servidores y unidades en la nube.</caption>
       <caption xml:lang="de">Server und Cloud-Laufwerke verbinden.</caption>
@@ -205,7 +207,7 @@
       <caption xml:lang="zh_TW">連線至伺服器和雲端磁碟。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-09-theme.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-09-theme.png</image>
       <caption>Themes with live preview.</caption>
       <caption xml:lang="es">Temas con vista previa en vivo.</caption>
       <caption xml:lang="de">Designs mit Live-Vorschau.</caption>
@@ -225,7 +227,7 @@
       <caption xml:lang="zh_TW">支援即時預覽的佈景主題。</caption>
     </screenshot>
     <screenshot>
-      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/main/docs/images/screenshots/atlas-store-10-settings.png</image>
+      <image type="source">https://raw.githubusercontent.com/neondeex/atlas-filemanager/v0.1.6-beta.4/docs/images/screenshots/atlas-store-10-settings.png</image>
       <caption>Searchable settings, including Win+E.</caption>
       <caption xml:lang="es">Ajustes con búsqueda, incluido Win+E.</caption>
       <caption xml:lang="de">Durchsuchbare Einstellungen, auch für Win+E.</caption>
@@ -246,6 +248,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.1.6-beta.4" date="2026-11-21">
+      <url>https://github.com/neondeex/atlas-filemanager/releases/tag/v0.1.6-beta.4</url>
+      <description>
+        <p>File dates now show in local time, improved Linux Wayland clipboard support, multi-disk listing deduplication, and setting to make Atlas default file manager.</p>
+      </description>
+    </release>
     <release version="0.1.6-beta.2" date="2026-11-13">
       <url>https://github.com/neondeex/atlas-filemanager/releases/tag/v0.1.6-beta.2</url>
       <description>
