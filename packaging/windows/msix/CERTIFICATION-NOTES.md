@@ -15,12 +15,16 @@ to execute the desktop application and access the files and folders the user
 chooses to browse/manage, including normal Shell integration and local previews.
 This capability does not itself request administrator privileges.
 
-`unvirtualizedResources` is used only for the opt-in "Open Atlas with Win+E"
-setting (off by default). The manifest excludes exactly two per-user keys from
-registry virtualization — `HKCU\Software\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}`
-(the Win+E target) and `HKCU\Software\Atlas\Integration` (the backup of the
-original value). Turning the setting off restores the original value and deletes
-the backup. No other registry location is unvirtualized.
+`unvirtualizedResources` has been removed from the MSIX manifest. The optional
+"Open Atlas with Win+E" setting (off by default) no longer writes to the Windows
+Registry in the Store package. Instead, enabling it activates the packaged
+`windows.startupTask` (`AtlasWinEHelper`, declared `Enabled="false"` by default)
+which runs a lightweight background shortcut helper (`atlas.exe --atlas-win-e-helper`)
+using a low-level keyboard hook (`WH_KEYBOARD_LL`) that only intercepts `Win+E`
+to launch Atlas. Turning the setting off disables the startup task and stops the
+helper immediately. Uninstalling Atlas from Windows automatically terminates the
+helper and removes the `windows.startupTask`, immediately restoring Windows File
+Explorer as the `Win+E` target with zero leftover registry changes.
 
 The ordinary local file-manager functions can be exercised without an account.
 Cloud connections are optional and require the tester's account at the selected

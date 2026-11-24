@@ -41,7 +41,9 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 
 fn main() {
     #[cfg(windows)]
-    if atlas_win_space::mft_space::helper::try_run() {
+    if atlas_win_space::mft_space::helper::try_run()
+        || atlas_win_space::integration::try_run_helper()
+    {
         return;
     }
     let version = option_env!("ATLAS_RELEASE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));

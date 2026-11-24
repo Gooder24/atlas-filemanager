@@ -5,6 +5,28 @@ Write user-facing release notes here. Release headings use
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-24
+
+### Fixed
+
+- Windows: Arabic and RTL text now renders in the right visual order with properly joined glyphs on DirectWrite (#16).
+- Windows: Win+E integration in the Microsoft Store (MSIX) package now uses an opt-in startup shortcut helper with zero registry writes and no `unvirtualizedResources` capability, restoring File Explorer automatically on uninstall. The direct-download Windows installer also restores Win+E automatically on uninstall.
+- Scroll overscroll is disabled by default (#42), with theme and Miller column polish.
+- File dates (Details, inspector, tooltips, transfer conflicts) show your local time instead of UTC.
+- Removing a cloud account works even when its provider extension cannot start.
+- Windows 11 glass windows pause blur while dragging or resizing to eliminate drag lag (#6), and Windows 10 uses the legacy blur material.
+- Closing Atlas with the window close button saves tabs, panes and grouping; dragging an unselected file moves it directly.
+- Dragging files to other applications copies originals safely, Markdown previews scroll smoothly, native Windows PDF previews work reliably, and theme color picker inputs preserve focus and paste.
+- Linux: Wayland/GNOME clipboard copy-paste works reliably without stale entries, Drives lists each disk once (including Fedora Atomic), search index stays current, private folders open as folders, and disk cleanup & Recycle Bin integration are available.
+- Store packages declare the Microsoft Desktop VCLibs runtime dependency and updated Windows taskbar icons.
+
+### New
+
+- Preview button next to the address bar in each pane, command-palette sort commands, and remappable Quick Look shortcut.
+- Linux: default file manager setting, Nix flake, and stripped release binaries with separate debug symbols.
+
+Thanks to @Zayad20 for the Windows Arabic/RTL DirectWrite fix and @Gooder24 for the Linux contributions in this release.
+
 ## [0.1.6-beta.4] - 2026-11-21
 
 ### Fixed

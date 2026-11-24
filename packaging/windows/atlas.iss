@@ -78,6 +78,7 @@ Filename: "{app}\atlas.exe"; Description: "Launch Atlas"; Flags: nowait postinst
 
 [UninstallRun]
 Filename: "{app}\atlas-search-service.exe"; Parameters: "--uninstall"; Flags: runhidden
+Filename: "{app}\atlas.exe"; Parameters: "--atlas-restore-win-e"; Flags: runhidden; RunOnceId: "RestoreWinE"
 
 
 [Code]

@@ -1,4 +1,11 @@
-//! Explicit, reversible per-user Win+E integration. Startup only reads status.
+//! Explicit, reversible per-user Win+E integration.
+//! - Packaged (MSIX) builds use `windows.startupTask` + a lightweight
+//!   `WH_KEYBOARD_LL` helper (zero registry writes, clean automatic removal on
+//!   uninstall, no `unvirtualizedResources` capability).
+//! - Unpackaged (Inno `.exe`) builds use the per-user Explorer CLSID override
+//!   with backup restoration on toggle-off and on uninstall (`--atlas-restore-win-e`).
+mod win_e_helper;
+
 use std::{
     io,
     path::Path,
@@ -9,6 +16,7 @@ use windows_sys::Win32::{
     System::Registry::*,
 };
 
+const RESTORE_WIN_E_ARG: &str = "--atlas-restore-win-e";
 const TARGET: &str =
     r"Software\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}\shell\opennewwindow\command";
 const BACKUP: &str = r"Software\Atlas\Integration\WinE";
@@ -192,6 +200,9 @@ fn owned(target: &Key, backup: &Key) -> io::Result<bool> {
         && target.get(DELEGATE)? == Some(Value::text("")))
 }
 pub fn win_e_enabled() -> io::Result<bool> {
+    if is_packaged() {
+        return win_e_helper::packaged_win_e_enabled();
+    }
     let (Some(target), Some(backup)) = (Key::open(TARGET, false)?, Key::open(BACKUP, false)?)
     else {
         return Ok(false);
@@ -199,20 +210,34 @@ pub fn win_e_enabled() -> io::Result<bool> {
     owned(&target, &backup)
 }
 pub fn set_win_e_enabled(enabled: bool) -> io::Result<()> {
-    set_enabled_at(TARGET, BACKUP, &launch_executable()?, enabled)
-}
-/// MSIX installs live under `WindowsApps`, which Explorer cannot launch
-/// directly; the package's execution alias is the stable launchable path.
-fn launch_executable() -> io::Result<std::path::PathBuf> {
     if is_packaged() {
-        let local = std::env::var_os("LOCALAPPDATA")
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "LOCALAPPDATA is not set"))?;
-        let alias = Path::new(&local).join(r"Microsoft\WindowsApps\atlas.exe");
-        if alias.exists() {
-            return Ok(alias);
-        }
+        return win_e_helper::set_packaged_win_e_enabled(enabled);
     }
-    std::env::current_exe()
+    set_enabled_at(TARGET, BACKUP, &std::env::current_exe()?, enabled)
+}
+
+/// Must run before GUI/logging initialization in `atlas.exe`.
+/// Handles:
+/// - `--atlas-win-e-helper`: packaged MSIX Win+E shortcut listener.
+/// - `--atlas-restore-win-e`: unpackaged Inno uninstall cleanup that restores
+///   the original Win+E registry command if Atlas still owns it.
+pub fn try_run_helper() -> bool {
+    let Some(first) = std::env::args_os().nth(1) else {
+        return false;
+    };
+    if first == win_e_helper::HELPER_ARG {
+        win_e_helper::run_helper();
+        return true;
+    }
+    if first == RESTORE_WIN_E_ARG {
+        if !is_packaged() {
+            if let Ok(exe) = std::env::current_exe() {
+                let _ = set_enabled_at(TARGET, BACKUP, &exe, false);
+            }
+        }
+        return true;
+    }
+    false
 }
 pub fn is_packaged() -> bool {
     use windows_sys::Win32::{
@@ -276,6 +301,17 @@ fn set_enabled_at(
     Ok(())
 }
 
+/// Call on an initialized COM apartment after the startup shell work settles.
+pub fn free_unused_com_libraries() {
+    unsafe {
+        windows::Win32::System::Com::CoFreeUnusedLibraries();
+    }
+}
+
+pub fn double_click_interval_ms() -> u32 {
+    unsafe { windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,14 +348,4 @@ mod tests {
         assert!(set_enabled_at(&target_path, &backup_path, exe, false).is_err());
         assert_eq!(target.get("").unwrap(), Some(other));
     }
-}
-/// Call on an initialized COM apartment after the startup shell work settles.
-pub fn free_unused_com_libraries() {
-    unsafe {
-        windows::Win32::System::Com::CoFreeUnusedLibraries();
-    }
-}
-
-pub fn double_click_interval_ms() -> u32 {
-    unsafe { windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() }
 }

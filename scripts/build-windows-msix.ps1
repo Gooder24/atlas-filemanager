@@ -24,8 +24,12 @@ $sourceUrl = if ($env:ATLAS_SOURCE_URL) { $env:ATLAS_SOURCE_URL } else { "https:
 if ($LASTEXITCODE -ne 0) { throw "Corresponding source snapshot verification failed." }
 $icon = Join-Path $repo "packaging\icons\atlas.png"
 $unplatedIcon = Join-Path $repo "packaging\icons\atlas-unplated.png"
+$lightUnplatedIcon = Join-Path $repo "packaging\icons\atlas-lightunplated.png"
 if (-not (Test-Path $unplatedIcon)) {
     $unplatedIcon = $icon
+}
+if (-not (Test-Path $lightUnplatedIcon)) {
+    $lightUnplatedIcon = $icon
 }
 
 # Packaging does not terminate unrelated Atlas/build processes.
@@ -157,6 +161,7 @@ function Save-ResizedAsset {
 
 $source = [System.Drawing.Image]::FromFile($icon)
 $sourceUnplated = [System.Drawing.Image]::FromFile($unplatedIcon)
+$sourceLightUnplated = [System.Drawing.Image]::FromFile($lightUnplatedIcon)
 try {
     # 1. Square150x150Logo (Medium Tile)
     $sq150Scales = @{
@@ -224,12 +229,13 @@ try {
     foreach ($sz in $unplatedSizes) {
         Save-ResizedAsset -SourceImage $sourceUnplated -TargetWidth $sz -TargetHeight $sz `
             -DestinationPath (Join-Path $assets.FullName "Square44x44Logo.altform-unplated_targetsize-$sz.png")
-        Save-ResizedAsset -SourceImage $sourceUnplated -TargetWidth $sz -TargetHeight $sz `
+        Save-ResizedAsset -SourceImage $sourceLightUnplated -TargetWidth $sz -TargetHeight $sz `
             -DestinationPath (Join-Path $assets.FullName "Square44x44Logo.altform-lightunplated_targetsize-$sz.png")
     }
 } finally {
     $source.Dispose()
     $sourceUnplated.Dispose()
+    $sourceLightUnplated.Dispose()
 }
 
 $makeAppx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `

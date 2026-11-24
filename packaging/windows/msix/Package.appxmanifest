@@ -3,10 +3,11 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
-  IgnorableNamespaces="uap uap5 desktop4 rescap virtualization">
+  IgnorableNamespaces="uap uap5 uap10 desktop desktop4 rescap">
 
   <Identity
     Name="CuberLabs.AtlasFileManager"
@@ -19,19 +20,12 @@
     <PublisherDisplayName>Cuber Labs</PublisherDisplayName>
     <Description>A file manager for Windows.</Description>
     <Logo>Assets\StoreLogo.png</Logo>
-    <!-- Win+E integration must write the real HKCU so Explorer sees it. -->
-    <virtualization:RegistryWriteVirtualization>
-      <virtualization:ExcludedKeys>
-        <virtualization:ExcludedKey>HKEY_CURRENT_USER\Software\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}</virtualization:ExcludedKey>
-        <virtualization:ExcludedKey>HKEY_CURRENT_USER\Software\Atlas\Integration</virtualization:ExcludedKey>
-      </virtualization:ExcludedKeys>
-    </virtualization:RegistryWriteVirtualization>
   </Properties>
 
   <Dependencies>
     <TargetDeviceFamily
       Name="Windows.Desktop"
-      MinVersion="10.0.17763.0"
+      MinVersion="10.0.19041.0"
       MaxVersionTested="10.0.26100.0" />
     <PackageDependency
       Name="Microsoft.VCLibs.140.00.UWPDesktop"
@@ -85,12 +79,21 @@
             <uap5:ExecutionAlias Alias="atlas.exe" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
+        <desktop:Extension
+          Category="windows.startupTask"
+          Executable="atlas.exe"
+          EntryPoint="Windows.FullTrustApplication"
+          uap10:Parameters="--atlas-win-e-helper">
+          <desktop:StartupTask
+            TaskId="AtlasWinEHelper"
+            Enabled="false"
+            DisplayName="Atlas Win+E Shortcut" />
+        </desktop:Extension>
       </Extensions>
     </Application>
   </Applications>
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
-    <rescap:Capability Name="unvirtualizedResources" />
   </Capabilities>
 </Package>
