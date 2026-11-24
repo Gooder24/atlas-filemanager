@@ -293,6 +293,8 @@ pub struct App {
     >,
     pub(crate) details_hover: Option<(TileId, usize)>,
     pub(crate) miller_column_bounds: HashMap<(TileId, usize), gpui::Bounds<gpui::Pixels>>,
+    /// User-chosen Miller column widths per (pane, column index), in zoom-independent px.
+    pub(crate) miller_col_widths: HashMap<(TileId, usize), f32>,
     pub(crate) dropzone_selection: atlas_model::tab::SelectionState<PathBuf>,
     pub(crate) dropzone_rects: Vec<(PathBuf, gpui::Bounds<gpui::Pixels>)>,
     pub(crate) dropzone_bounds: Option<gpui::Bounds<gpui::Pixels>>,
@@ -337,6 +339,11 @@ pub struct App {
     pub(crate) settings_input: Option<Entity<InputState>>,
     pub(crate) theme_editor: Option<crate::ui::theme_editor::ThemeEditor>,
     pub(crate) theme_fork_error: Option<String>,
+    /// Accent override picker on the theme page; built when the page opens.
+    pub(crate) accent_picker: Option<(
+        Entity<gpui_component::color_picker::ColorPickerState>,
+        gpui::Subscription,
+    )>,
     /// Transient state of the settings palette (selection, category, picker).
     pub(crate) settings_ui: crate::ui::settings_palette::SettingsUi,
     /// System font families are relatively expensive to enumerate, so cache

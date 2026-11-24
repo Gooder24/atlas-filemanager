@@ -64,7 +64,6 @@ architectures: [amd64]
 apps:
   atlas:
     command: usr/bin/atlas
-    desktop: usr/share/applications/atlas.desktop
     environment:
       LD_LIBRARY_PATH: \$SNAP/usr/lib/atlas
 EOF

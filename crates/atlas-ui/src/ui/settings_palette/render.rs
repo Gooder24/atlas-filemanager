@@ -1690,6 +1690,9 @@ impl App {
             });
             query
         });
+        if def.id == "theme-editor" {
+            self.ensure_accent_picker(window, cx);
+        }
         self.settings_ui.drill = Some(Drill {
             setting: def.id,
             input,

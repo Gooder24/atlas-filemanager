@@ -718,6 +718,7 @@ impl App {
 
             details_hover: None,
             miller_column_bounds: HashMap::new(),
+            miller_col_widths: HashMap::new(),
             dropzone_selection: Default::default(),
             dropzone_rects: Vec::new(),
             dropzone_bounds: None,
@@ -749,6 +750,7 @@ impl App {
             settings_input: None,
             theme_editor: None,
             theme_fork_error: None,
+            accent_picker: None,
             settings_ui: crate::ui::settings_palette::SettingsUi::default(),
             settings_font_families: None,
             rename_edit: None,

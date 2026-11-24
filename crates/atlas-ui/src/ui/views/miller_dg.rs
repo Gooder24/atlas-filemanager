@@ -57,6 +57,16 @@ use gpui_component::{v_flex, ActiveTheme, ElementExt};
 use std::path::PathBuf;
 
 pub const MILLER_COL_W: f32 = 250.0;
+/// Narrowest a column can be dragged or auto-fitted to.
+pub const MILLER_MIN_COL_W: f32 = 120.0;
+/// Widest a column can be dragged to.
+pub const MILLER_MAX_COL_W: f32 = 1200.0;
+/// Auto-fit never grows a column past this, however long a name is.
+pub const MILLER_AUTOFIT_MAX_W: f32 = 480.0;
+/// Half-width of the invisible resize grip centred on a column's right edge.
+const MILLER_GRIP_HALF_W: f32 = 4.0;
+/// Auto-fit measures only this many of the longest names (by char count).
+const MILLER_AUTOFIT_SAMPLE: usize = 64;
 pub const MILLER_HEADER_H: f32 = 28.0;
 pub const MILLER_ROW_H: f32 = 26.0;
 pub const MILLER_CHECKBOX_SZ: f32 = 15.0;
@@ -64,6 +74,62 @@ pub const MILLER_ICON_SZ: f32 = 14.0;
 pub const MILLER_CARET_SZ: f32 = 12.0;
 pub const MILLER_PAD_X: f32 = 8.0;
 pub const MILLER_PAD_Y: f32 = 2.0;
+
+/// Left edge of column `i` given per-column widths.
+fn miller_col_left(widths: &[f32], i: usize) -> f32 {
+    widths.iter().take(i).sum()
+}
+
+/// Real-pixel width of column `ci`: the user's width (zoom-independent) or the default.
+pub(crate) fn miller_col_width_px(
+    widths: &std::collections::HashMap<(TabId, usize), f32>,
+    pane: TabId,
+    ci: usize,
+    zoom: f32,
+) -> f32 {
+    widths.get(&(pane, ci)).map_or(MILLER_COL_W, |w| {
+        w.clamp(MILLER_MIN_COL_W, MILLER_MAX_COL_W)
+    }) * zoom
+}
+
+/// Width (zoom-independent px) that fits the longest names of a column, capped
+/// at `MILLER_AUTOFIT_MAX_W`.
+fn miller_autofit_width(
+    entries: &[FileEntry],
+    font: &Font,
+    font_size: Pixels,
+    zoom: f32,
+    window: &Window,
+) -> f32 {
+    let mut longest: Vec<&FileEntry> = entries.iter().collect();
+    if longest.len() > MILLER_AUTOFIT_SAMPLE {
+        longest.select_nth_unstable_by_key(MILLER_AUTOFIT_SAMPLE, |e| {
+            std::cmp::Reverse(e.name.chars().count())
+        });
+        longest.truncate(MILLER_AUTOFIT_SAMPLE);
+    }
+    let mut text_w = 0.0f32;
+    let mut caret = false;
+    for entry in longest {
+        let line = shape_text(
+            entry.name.to_string(),
+            font,
+            font_size,
+            Hsla::default(),
+            window,
+        );
+        text_w = text_w.max(line_width(&line));
+        caret |= matches!(entry.kind(), FileKind::Dir);
+    }
+    // Reserve the caret slot even if only shorter names are folders.
+    caret |= entries.iter().any(|e| matches!(e.kind(), FileKind::Dir));
+    let chrome = MILLER_PAD_X * 2.0
+        + MILLER_ICON_SZ
+        + 6.0
+        + if caret { MILLER_CARET_SZ + 4.0 } else { 0.0 }
+        + 6.0;
+    ((text_w / zoom.max(0.01)).ceil() + chrome).clamp(MILLER_MIN_COL_W, MILLER_AUTOFIT_MAX_W)
+}
 
 fn with_miller_clip(window: &mut Window, bounds: Bounds<Pixels>, draw: impl FnOnce(&mut Window)) {
     let bounds = bounds.intersect(&window.content_mask().bounds);
@@ -284,7 +350,8 @@ pub struct MillerDgElement {
     id: ElementId,
     pane_id: TabId,
     app: WeakEntity<App>,
-    col_w: f32,
+    /// Real-pixel width of each column, in cascade order.
+    widths: Vec<f32>,
     header_h: f32,
     row_h: f32,
     zoom: f32,
@@ -301,7 +368,7 @@ impl MillerDgElement {
     pub fn new(
         pane_id: TabId,
         app: WeakEntity<App>,
-        col_w: f32,
+        widths: Vec<f32>,
         header_h: f32,
         row_h: f32,
         zoom: f32,
@@ -315,7 +382,7 @@ impl MillerDgElement {
             id: ElementId::Name(SharedString::from(format!("miller-dg-{}", pane_id.0))),
             pane_id,
             app,
-            col_w,
+            widths,
             header_h,
             row_h,
             zoom,
@@ -398,7 +465,7 @@ impl Element for MillerDgElement {
         };
 
         let pane_id = self.pane_id;
-        let col_w = self.col_w;
+        let widths = self.widths.clone();
         let header_h = self.header_h;
         let row_h = self.row_h;
         let zoom = self.zoom;
@@ -439,7 +506,8 @@ impl Element for MillerDgElement {
             for ci in 0..column_count {
                 let col = &miller_columns[ci];
                 let visible = col.visible_indices(&filter, show_files, show_folders);
-                let col_x = ci as f32 * col_w;
+                let col_w = widths.get(ci).copied().unwrap_or(MILLER_COL_W * zoom);
+                let col_x = miller_col_left(&widths, ci);
                 let col_slots = miller_column_cut(col_x, 0.0, col_w, col_h, header_h);
                 let col_bounds = Bounds {
                     origin: point(bounds.origin.x + px(col_x), bounds.origin.y),
@@ -842,7 +910,7 @@ impl Element for MillerDgElement {
                 f32::from(bounds.size.height),
                 f32::from(content_mask.size.width),
                 f32::from(content_mask.size.height),
-                self.col_w,
+                self.widths.iter().sum::<f32>(),
                 self.row_h,
             ],
         );
@@ -935,7 +1003,29 @@ impl Element for MillerDgElement {
             }
         }
 
-        if is_over && hover_row_info.is_some() {
+        let grips: Vec<(usize, f32)> = prepaint
+            .columns
+            .iter()
+            .filter(|col| col.interactive)
+            .map(|col| (col.col_idx, col.slots.col_slot.x + col.slots.col_slot.w))
+            .collect();
+        let grip_hit = |lx: f32| {
+            grips
+                .iter()
+                .find(|(_, edge)| (lx - edge).abs() <= MILLER_GRIP_HALF_W * zoom)
+                .map(|(ci, _)| *ci)
+        };
+        let over_grip = is_over && grip_hit(f32::from(mouse_pos.x - origin.x)).is_some();
+        let resizing = window
+            .use_keyed_state(
+                SharedString::from(format!("miller-col-resize-{}", self.pane_id.0)),
+                cx,
+                |_, _| None::<(usize, f32, f32)>,
+            )
+            .clone();
+        if over_grip || resizing.read(cx).is_some() {
+            window.set_cursor_style(CursorStyle::ResizeColumn, &prepaint.hitbox);
+        } else if is_over && hover_row_info.is_some() {
             window.set_cursor_style(CursorStyle::PointingHand, &prepaint.hitbox);
         }
 
@@ -1237,6 +1327,37 @@ impl Element for MillerDgElement {
             })
             .collect::<Vec<_>>();
 
+        let resize_down = resizing.clone();
+        let fit_font = self.font.clone();
+        let fit_font_size = self.font_size;
+        let resize_move = resizing.clone();
+        let resize_move_view = app_entity.clone();
+        window.on_mouse_event::<MouseMoveEvent>(move |ev, phase, _window, cx| {
+            if phase != DispatchPhase::Capture && phase != DispatchPhase::Bubble {
+                return;
+            }
+            let Some((ci, start_x, start_w)) = *resize_move.read(cx) else {
+                return;
+            };
+            if ev.pressed_button != Some(MouseButton::Left) {
+                resize_move.update(cx, |state, _| *state = None);
+                return;
+            }
+            let w = (start_w + (f32::from(ev.position.x) - start_x) / zoom)
+                .clamp(MILLER_MIN_COL_W, MILLER_MAX_COL_W);
+            resize_move_view.update(cx, |this, cx| {
+                this.miller_col_widths.insert((pane_id, ci), w);
+                this.notify_pane(pane_id, cx);
+                cx.notify();
+            });
+        });
+        let resize_up = resizing.clone();
+        window.on_mouse_event::<gpui::MouseUpEvent>(move |ev, _phase, _window, cx| {
+            if ev.button == MouseButton::Left && resize_up.read(cx).is_some() {
+                resize_up.update(cx, |state, _| *state = None);
+            }
+        });
+
         window.on_mouse_event::<MouseDownEvent>(move |ev, phase, window, cx| {
             if phase != DispatchPhase::Bubble {
                 return;
@@ -1247,6 +1368,52 @@ impl Element for MillerDgElement {
 
             let lx = f32::from(ev.position.x - origin.x);
             let ly = f32::from(ev.position.y - origin.y);
+
+            // Column dividers: drag to resize, double-click to fit the names
+            // (Alt+double-click fits every column, like Finder).
+            if ev.button == MouseButton::Left {
+                let grip = cols_for_down.iter().find(|(_, slot, ..)| {
+                    ly >= slot.y
+                        && ly < slot.y + slot.h
+                        && (lx - (slot.x + slot.w)).abs() <= MILLER_GRIP_HALF_W * zoom
+                });
+                if let Some((ci, slot, ..)) = grip {
+                    let ci = *ci;
+                    if ev.click_count >= 2 {
+                        let all = ev.modifiers.alt;
+                        let (font, font_size) = (fit_font.clone(), fit_font_size);
+                        down_view.update(cx, |this, cx| {
+                            let targets: Vec<usize> = if all {
+                                (0..cols_for_down.len()).collect()
+                            } else {
+                                vec![ci]
+                            };
+                            for target in targets {
+                                let Some(entries) = this
+                                    .state
+                                    .tab_states
+                                    .get(&pane_id)
+                                    .and_then(|ts| ts.miller.columns.get(target))
+                                    .map(|col| col.entries.clone())
+                                else {
+                                    continue;
+                                };
+                                let w =
+                                    miller_autofit_width(&entries, &font, font_size, zoom, window);
+                                this.miller_col_widths.insert((pane_id, target), w);
+                            }
+                            this.notify_pane(pane_id, cx);
+                            cx.notify();
+                        });
+                    } else {
+                        resize_down.update(cx, |state, _| {
+                            *state = Some((ci, ev.position.x.into(), slot.w / zoom));
+                        });
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
+            }
 
             for (ci, col_slot, body_slot, col_path, rows) in &cols_for_down {
                 if !col_slot.contains(lx, ly) {
@@ -1533,14 +1700,17 @@ impl App {
             .unwrap_or(0);
 
         let col_w = MILLER_COL_W * zoom;
+        let widths: Vec<f32> = (0..column_count)
+            .map(|ci| miller_col_width_px(&self.miller_col_widths, pane_id, ci, zoom))
+            .collect();
         let header_h = MILLER_HEADER_H * zoom;
         let row_h = MILLER_ROW_H * zoom;
-        let total_w = (column_count as f32 * col_w).max(col_w);
+        let total_w = widths.iter().sum::<f32>().max(col_w);
 
         let miller_el = MillerDgElement::new(
             pane_id,
             view.downgrade(),
-            col_w,
+            widths.clone(),
             header_h,
             row_h,
             zoom,
@@ -1575,9 +1745,9 @@ impl App {
                     ) {
                         let is_dir = matches!(entry.kind(), FileKind::Dir);
                         let row_y = header_h + (position as f32 * row_h) - scroll_y;
-                        let col_x = ci as f32 * col_w;
+                        let col_x = miller_col_left(&widths, ci);
                         let row_slots = miller_row_cut(
-                            col_x, row_y, col_w, row_h, zoom, is_dir,
+                            col_x, row_y, widths[ci], row_h, zoom, is_dir,
                             false, // checkbox lives in the icon slot; no gutter
                         );
                         let name_slot = row_slots.name_slot;
@@ -1666,6 +1836,8 @@ impl App {
             .get(&pane_id)
             .map_or(0, |ts| ts.miller.focused);
         let reveal_handle = horizontal.clone();
+        let reveal_widths = widths.clone();
+        let reveal_total_w = widths.iter().sum::<f32>();
         let instant = cx.reduce_motion()
             || self.is_drag_active(cx.has_active_drag())
             || self.rename_edit.is_some();
@@ -1679,10 +1851,16 @@ impl App {
                     |_, _| crate::ui::dg::motion::ColumnReveal::new(current, now),
                 );
                 let (offset, active) = state.update(cx, |s, _| {
-                    s.sample(
+                    s.sample_layout(
                         focus,
                         column_count,
-                        col_w,
+                        reveal_total_w,
+                        |i| {
+                            (
+                                miller_col_left(&reveal_widths, i),
+                                reveal_widths.get(i).copied().unwrap_or(col_w),
+                            )
+                        },
                         f32::from(bounds.size.width),
                         current,
                         instant,
@@ -1783,6 +1961,15 @@ fn miller_drag_layer(view: &gpui::Entity<App>, pane_id: TabId, total_w: f32) -> 
             let pos = window.mouse_position();
             let hit = {
                 let app = drag_view.read(&*cx);
+                // A press on a column divider resizes; it must not start a file drag.
+                if app.miller_column_bounds.iter().any(|((pane, _), b)| {
+                    *pane == pane_id
+                        && (pos.x - b.right()).abs() <= px(MILLER_GRIP_HALF_W)
+                        && pos.y >= b.top()
+                        && pos.y < b.bottom()
+                }) {
+                    return crate::ui::drag::empty_any_drag(cx);
+                }
                 let rects = app.miller_row_rects.borrow();
                 rects
                     .iter()

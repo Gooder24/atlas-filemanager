@@ -1029,6 +1029,7 @@ theme_fork_unavailable: "El tema activo no está disponible. Elige otro tema e i
 theme_save_error: "No se pudo guardar el tema: %{error}"
 theme_editor_description: "Tu copia está guardada. Los cambios de color se ven en vivo; guárdalos para conservarlos."
 theme_color_accent: "Acento"
+theme_accent_reset: "Restablecer"
 theme_color_background: "Fondo de la ventana"
 theme_color_foreground: "Texto"
 theme_save: "Guardar tema"

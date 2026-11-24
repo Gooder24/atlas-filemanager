@@ -1030,6 +1030,7 @@ theme_fork_unavailable: "The active theme is unavailable. Select another theme a
 theme_save_error: "Could not save the theme: %{error}"
 theme_editor_description: "Your copy is saved. Color changes preview live — save to keep them."
 theme_color_accent: "Accent"
+theme_accent_reset: "Reset"
 theme_color_background: "Window background"
 theme_color_foreground: "Text"
 theme_save: "Save theme"

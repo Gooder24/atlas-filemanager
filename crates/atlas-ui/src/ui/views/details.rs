@@ -201,21 +201,15 @@ impl App {
                     t.list_active
                 },
                 t.muted_foreground,
-                if is_glass {
-                    t.foreground.opacity(0.035)
-                } else {
-                    backdrop_tint(t.secondary, 0.18)
-                },
+                // Same as Ember; on Glass `secondary` is already translucent, so
+                // this stays a faint tint instead of a separate band.
+                backdrop_tint(t.secondary, 0.18),
                 if is_glass {
                     t.foreground.opacity(0.022)
                 } else {
                     backdrop_tint(t.list_even, 0.04)
                 },
-                if is_glass {
-                    gpui::transparent_black()
-                } else {
-                    t.border
-                },
+                t.border,
             )
         };
         let (accent, accent_fg) = self.selection_colors(pane_id, accent, accent_fg, fg, muted);
@@ -290,9 +284,8 @@ impl App {
             muted,
             header_bg,
             stripe_bg,
-            // Hairline under the header; on glass it must still exist.
-            border: if is_glass { fg.opacity(0.16) } else { border },
-            glass: is_glass,
+            border,
+            glass: false,
         };
 
         let header = details_header(
