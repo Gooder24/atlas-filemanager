@@ -53,11 +53,12 @@ pub(crate) const COMMANDS: &[CommandMeta] = &[
     CommandMeta::remappable("nav.parent", Some("alt-up")),
     CommandMeta::remappable("nav.goto", Some("ctrl-k")),
     CommandMeta::remappable("nav.refresh", Some("f5")),
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     CommandMeta::remappable("nav.recycle-bin", None),
     CommandMeta::remappable("view.hidden", Some("ctrl-.")),
     CommandMeta::remappable("view.vim-mode", None),
     CommandMeta::remappable("view.inspector", Some("ctrl-i")),
+    CommandMeta::remappable("view.quick-look", Some("space")),
     CommandMeta::remappable("view.branch-view", Some("ctrl-b")),
     CommandMeta::remappable("view.sidebar", None),
     CommandMeta::remappable("view.sidebar-collapse", Some("ctrl-alt-b")),
@@ -66,6 +67,11 @@ pub(crate) const COMMANDS: &[CommandMeta] = &[
     CommandMeta::remappable("view.list", None),
     CommandMeta::remappable("view.miller", None),
     CommandMeta::remappable("view.tree", None),
+    CommandMeta::remappable("view.sort-name", None),
+    CommandMeta::remappable("view.sort-modified", None),
+    CommandMeta::remappable("view.sort-size", None),
+    CommandMeta::remappable("view.sort-type", None),
+    CommandMeta::remappable("view.sort-reverse", None),
     CommandMeta::remappable("view.group-none", None),
     CommandMeta::remappable("view.group-date", None),
     CommandMeta::remappable("view.group-size", None),
@@ -180,5 +186,12 @@ mod tests {
     fn vim_mode_command_is_registered_and_remappable() {
         assert_eq!(default_command_shortcut("view.vim-mode"), None);
         assert!(command_remappable("view.vim-mode"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn recycle_bin_command_can_be_remapped_on_linux() {
+        assert_eq!(default_command_shortcut("nav.recycle-bin"), None);
+        assert!(command_remappable("nav.recycle-bin"));
     }
 }

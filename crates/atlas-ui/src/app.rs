@@ -33,7 +33,7 @@ pub(crate) mod vault;
 
 pub struct App {
     pub(crate) vault: Option<vault::Dialog>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     pub(crate) vault_mount: Option<atlas_core::vault::mount::Mounted>,
     pub(crate) converter: Option<crate::ui::converter::Session>,
     pub(crate) cleanup_panel: Option<Entity<crate::ui::cleanup::CleanupPanel>>,
@@ -43,6 +43,11 @@ pub struct App {
     pub(crate) startup_started: Instant,
     pub(crate) startup_first_render_logged: bool,
     pub(crate) close_after_tab_transfer: bool,
+    /// gpui runs on Wayland (see `clipboard_through_gpui`).
+    #[cfg(target_os = "linux")]
+    pub(crate) is_wayland: bool,
+    #[cfg(target_os = "linux")]
+    pub(crate) os_clipboard_ops: Vec<ops::OsClipboardOp>,
     /// The previous crash's report was uploaded (or is uploading) this session.
     pub(crate) crash_report_sent: bool,
     #[cfg(windows)]
@@ -288,6 +293,8 @@ pub struct App {
     >,
     pub(crate) details_hover: Option<(TileId, usize)>,
     pub(crate) miller_column_bounds: HashMap<(TileId, usize), gpui::Bounds<gpui::Pixels>>,
+    /// User-chosen Miller column widths per (pane, column index), in zoom-independent px.
+    pub(crate) miller_col_widths: HashMap<(TileId, usize), f32>,
     pub(crate) dropzone_selection: atlas_model::tab::SelectionState<PathBuf>,
     pub(crate) dropzone_rects: Vec<(PathBuf, gpui::Bounds<gpui::Pixels>)>,
     pub(crate) dropzone_bounds: Option<gpui::Bounds<gpui::Pixels>>,
@@ -332,6 +339,11 @@ pub struct App {
     pub(crate) settings_input: Option<Entity<InputState>>,
     pub(crate) theme_editor: Option<crate::ui::theme_editor::ThemeEditor>,
     pub(crate) theme_fork_error: Option<String>,
+    /// Accent override picker on the theme page; built when the page opens.
+    pub(crate) accent_picker: Option<(
+        Entity<gpui_component::color_picker::ColorPickerState>,
+        gpui::Subscription,
+    )>,
     /// Transient state of the settings palette (selection, category, picker).
     pub(crate) settings_ui: crate::ui::settings_palette::SettingsUi,
     /// System font families are relatively expensive to enumerate, so cache
@@ -424,7 +436,8 @@ pub struct App {
     /// Details-view column widths, shared across all panes.
     pub(crate) col_widths: ColWidths,
     pub(crate) typed_selection: Option<(atlas_model::pane::TabId, String, Instant)>,
-    #[cfg(windows)]
+    /// Windows: Win+E opens Atlas. Linux: Atlas is the default file manager.
+    #[cfg(any(windows, target_os = "linux"))]
     pub(crate) win_e_enabled: bool,
     /// User-facing order for Details metadata columns. Name stays fixed first.
     pub(crate) details_column_order: [DetailsColumn; 3],
@@ -1339,6 +1352,9 @@ pub(crate) struct DetailsHitModel {
     pub(crate) total_count: usize,
     /// Content-space row positions while sorting; empty for the O(1) idle path.
     pub(crate) presented_rows: Vec<(usize, f32)>,
+    /// Right edge of the Name column. Like Explorer, a press on an unselected
+    /// row's name drags the file; a press on the other columns draws a marquee.
+    pub(crate) name_right: Option<gpui::Pixels>,
 }
 
 impl DetailsHitModel {

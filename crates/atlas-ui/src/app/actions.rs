@@ -161,6 +161,8 @@ impl App {
                     // legacy per-tab flag made it vanish when focus moved.
                     let show = !self.preview_visible_for_focused();
                     self.state.settings.show_inspector = show;
+                    // Every pane chrome shows the panel toggle state.
+                    self.dirty_panes.extend(self.state.all_pane_tile_ids());
                     self.state
                         .for_each_tab_data_mut(|tab| tab.preview_enabled = false);
                     if !show {
@@ -224,10 +226,13 @@ impl App {
                     self.state.overlay.show_settings = true;
                 }
                 Action::ActivateLicense => {
-                    let key = arboard::Clipboard::new()
-                        .and_then(|mut clipboard| clipboard.get_text())
-                        .map(|text| text.trim().to_owned())
-                        .unwrap_or_default();
+                    let key = crate::app::ops::read_system_clipboard(|clipboard| {
+                        clipboard.get_text().ok()
+                    })
+                    .ok()
+                    .flatten()
+                    .map(|text| text.trim().to_owned())
+                    .unwrap_or_default();
                     // Keys are single short tokens; anything else is not a key.
                     if key.is_empty() || key.len() > 100 || key.contains(char::is_whitespace) {
                         self.toast_info(rust_i18n::t!("license_clipboard_empty").into_owned());
@@ -253,57 +258,50 @@ impl App {
                         let _ = tx.send(atlas_model::app_state::BgResult::LicenseChanged(result));
                     });
                 }
+                #[cfg(windows)]
                 Action::OpenCrashReports => {
-                    #[cfg(windows)]
-                    {
-                        let newest = atlas_win_space::crash::previous_crash()
-                            .and_then(|crash| crash.reports.first().cloned());
-                        match newest {
-                            Some(report) => {
-                                let _ = std::process::Command::new("explorer")
-                                    .arg(format!("/select,{}", report.display()))
-                                    .spawn();
-                            }
-                            None => {
-                                if let Ok(dir) = atlas_win_space::crash::crash_directory() {
-                                    let _ = std::fs::create_dir_all(&dir);
-                                    let _ = open::that(dir);
-                                }
+                    let newest = atlas_win_space::crash::previous_crash()
+                        .and_then(|crash| crash.reports.first().cloned());
+                    match newest {
+                        Some(report) => {
+                            let _ = std::process::Command::new("explorer")
+                                .arg(format!("/select,{}", report.display()))
+                                .spawn();
+                        }
+                        None => {
+                            if let Ok(dir) = atlas_win_space::crash::crash_directory() {
+                                let _ = std::fs::create_dir_all(&dir);
+                                let _ = open::that(dir);
                             }
                         }
                     }
                 }
+                #[cfg(windows)]
                 Action::SendCrashReport => {
-                    #[cfg(windows)]
-                    {
-                        let Some(crash) = atlas_win_space::crash::previous_crash() else {
-                            self.toast_info(rust_i18n::t!("crash_report_none").into_owned());
-                            continue;
-                        };
-                        if std::mem::replace(&mut self.crash_report_sent, true) {
-                            self.toast_info(
-                                rust_i18n::t!("crash_report_already_sent").into_owned(),
-                            );
-                            continue;
-                        }
-                        self.toast_info(rust_i18n::t!("crash_report_sending").into_owned());
-                        let tx = self.tx.clone();
-                        self.rt.spawn(async move {
-                            let result = atlas_core::crash_report::send(
-                                &crash.reports,
-                                &crash.version,
-                                crash.summary.as_deref(),
-                            )
-                            .await
-                            .map(|_| rust_i18n::t!("crash_report_sent").into_owned())
-                            .map_err(|error| {
-                                tracing::warn!(%error, "crash report upload failed");
-                                rust_i18n::t!("crash_report_failed").into_owned()
-                            });
-                            let _ =
-                                tx.send(atlas_model::app_state::BgResult::CrashReportSent(result));
-                        });
+                    let Some(crash) = atlas_win_space::crash::previous_crash() else {
+                        self.toast_info(rust_i18n::t!("crash_report_none").into_owned());
+                        continue;
+                    };
+                    if std::mem::replace(&mut self.crash_report_sent, true) {
+                        self.toast_info(rust_i18n::t!("crash_report_already_sent").into_owned());
+                        continue;
                     }
+                    self.toast_info(rust_i18n::t!("crash_report_sending").into_owned());
+                    let tx = self.tx.clone();
+                    self.rt.spawn(async move {
+                        let result = atlas_core::crash_report::send(
+                            &crash.reports,
+                            &crash.version,
+                            crash.summary.as_deref(),
+                        )
+                        .await
+                        .map(|_| rust_i18n::t!("crash_report_sent").into_owned())
+                        .map_err(|error| {
+                            tracing::warn!(%error, "crash report upload failed");
+                            rust_i18n::t!("crash_report_failed").into_owned()
+                        });
+                        let _ = tx.send(atlas_model::app_state::BgResult::CrashReportSent(result));
+                    });
                 }
                 Action::GetPremium => {
                     // Regional-price markets buy the Store add-on; the Store listing
@@ -778,6 +776,35 @@ impl App {
                         }
                         ts.selection.selected = flat_visible.iter().copied().collect();
                         ts.selection.keyboard_cursor = ts.selection.selected.iter().next().copied();
+                    }
+                }
+                Action::SortBy(col) => {
+                    use atlas_model::file_entry::{SortColumn, SortDir};
+                    let current = self
+                        .tab_data_for(self.state.focused_tile)
+                        .map(|t| (t.sort_col.clone(), t.sort_dir.clone()));
+                    let dir = match current {
+                        Some((c, SortDir::Asc)) if c == col => SortDir::Desc,
+                        Some((c, SortDir::Desc)) if c == col => SortDir::Asc,
+                        // Dates and sizes are most useful newest/largest first.
+                        _ if matches!(col, SortColumn::Modified | SortColumn::Size) => {
+                            SortDir::Desc
+                        }
+                        _ => SortDir::Asc,
+                    };
+                    self.process_actions([Action::SetSort { col, dir }]);
+                }
+                Action::ReverseSort => {
+                    use atlas_model::file_entry::SortDir;
+                    if let Some((col, dir)) = self
+                        .tab_data_for(self.state.focused_tile)
+                        .map(|t| (t.sort_col.clone(), t.sort_dir.clone()))
+                    {
+                        let dir = match dir {
+                            SortDir::Asc => SortDir::Desc,
+                            SortDir::Desc => SortDir::Asc,
+                        };
+                        self.process_actions([Action::SetSort { col, dir }]);
                     }
                 }
                 Action::SetGroupBy(mode) => {
@@ -1865,6 +1892,13 @@ impl App {
             return;
         }
         let text = atlas_core::util::display::clipboard_path_text(paths);
+        #[cfg(target_os = "linux")]
+        if self.clipboard_through_gpui() {
+            self.queue_os_clipboard(crate::app::ops::OsClipboardOp::Write(
+                gpui::ClipboardItem::new_string(text),
+            ));
+            return;
+        }
         if let Ok(mut cb) = arboard::Clipboard::new() {
             let _ = cb.set_text(text.clone());
             #[cfg(target_os = "linux")]

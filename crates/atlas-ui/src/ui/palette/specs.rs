@@ -1433,7 +1433,7 @@ impl App {
             p.map(|p| goto_entry(label.to_string(), p, ic, true, tab, pane))
         })
         .collect();
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         {
             let mut recycle_bin = PaletteItem::new(
                 rust_i18n::t!("cmd_nav_recycle_bin_title").to_string(),
@@ -2050,7 +2050,7 @@ impl App {
                 AtlasIcon::ArrowClockwise,
                 Action::Refresh(focused),
             ),
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
             CommandDef::new(
                 "nav.recycle-bin",
                 rust_i18n::t!("cmd_nav_recycle_bin_title"),
@@ -2291,6 +2291,13 @@ impl App {
                 Action::ToggleInspector,
             ),
             CommandDef::new(
+                "view.quick-look",
+                rust_i18n::t!("cmd_quick_look_title"),
+                rust_i18n::t!("cmd_view_inspector_desc"),
+                AtlasIcon::Eye,
+                Action::ToggleInspector,
+            ),
+            CommandDef::new(
                 "view.branch-view",
                 rust_i18n::t!("cmd_view_branch_view_title"),
                 rust_i18n::t!("cmd_view_branch_view_desc"),
@@ -2349,6 +2356,41 @@ impl App {
                 rust_i18n::t!("cmd_view_tree_desc"),
                 AtlasIcon::TreeStructure,
                 Action::SetViewMode(ViewMode::Tree),
+            ),
+            CommandDef::new(
+                "view.sort-name",
+                rust_i18n::t!("cmd_sort_name"),
+                "",
+                AtlasIcon::SortAscending,
+                Action::SortBy(atlas_model::file_entry::SortColumn::Name),
+            ),
+            CommandDef::new(
+                "view.sort-modified",
+                rust_i18n::t!("cmd_sort_modified"),
+                "",
+                AtlasIcon::SortAscending,
+                Action::SortBy(atlas_model::file_entry::SortColumn::Modified),
+            ),
+            CommandDef::new(
+                "view.sort-size",
+                rust_i18n::t!("cmd_sort_size"),
+                "",
+                AtlasIcon::SortAscending,
+                Action::SortBy(atlas_model::file_entry::SortColumn::Size),
+            ),
+            CommandDef::new(
+                "view.sort-type",
+                rust_i18n::t!("cmd_sort_type"),
+                "",
+                AtlasIcon::SortAscending,
+                Action::SortBy(atlas_model::file_entry::SortColumn::Kind),
+            ),
+            CommandDef::new(
+                "view.sort-reverse",
+                rust_i18n::t!("cmd_sort_reverse"),
+                "",
+                AtlasIcon::SortAscending,
+                Action::ReverseSort,
             ),
             CommandDef::new(
                 "view.group-none",
@@ -2943,6 +2985,8 @@ impl App {
                 AtlasIcon::Lock,
                 Action::DeactivateLicense,
             ),
+            // Crash reports are collected only on Windows (atlas-win-space).
+            #[cfg(windows)]
             CommandDef::new(
                 "sys.crash-reports",
                 rust_i18n::t!("cmd_sys_crash_reports_title"),
@@ -2950,6 +2994,7 @@ impl App {
                 AtlasIcon::Lifebuoy,
                 Action::OpenCrashReports,
             ),
+            #[cfg(windows)]
             CommandDef::new(
                 "sys.send-crash-report",
                 rust_i18n::t!("cmd_sys_send_crash_report_title"),

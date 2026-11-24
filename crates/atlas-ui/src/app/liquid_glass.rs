@@ -12,6 +12,7 @@ use atlas_model::file_entry::FileKind;
 use gpui::RenderImage;
 
 use crate::assets::liquid_glass_filetype;
+use crate::icon_theme::MultiResIcon;
 use crate::ui::icons::{file_type_icon_kind, FileTypeIcon};
 
 const ALL_ICONS: &[FileTypeIcon] = &[
@@ -29,10 +30,10 @@ const ALL_ICONS: &[FileTypeIcon] = &[
 ];
 
 pub(crate) struct LiquidGlassCache {
-    textures: HashMap<FileTypeIcon, Arc<RenderImage>>,
+    textures: HashMap<FileTypeIcon, Arc<MultiResIcon>>,
     /// Same art with darkened ink: the white glass vanishes on light surfaces.
-    light_textures: HashMap<FileTypeIcon, Arc<RenderImage>>,
-    fallback: Arc<RenderImage>,
+    light_textures: HashMap<FileTypeIcon, Arc<MultiResIcon>>,
+    fallback: Arc<MultiResIcon>,
 }
 
 impl LiquidGlassCache {
@@ -44,11 +45,11 @@ impl LiquidGlassCache {
             let path = kind.path();
             if let Some(bytes) = liquid_glass_filetype(path) {
                 if let Some(tex) =
-                    decode_png_to_render_image(bytes, [1.0; 3], AlphaMap::Gain(DARK_SURFACE_ALPHA))
+                    decode_png_to_multi(bytes, [1.0; 3], AlphaMap::Gain(DARK_SURFACE_ALPHA))
                 {
                     textures.insert(kind, tex);
                 }
-                if let Some(tex) = decode_png_to_render_image(
+                if let Some(tex) = decode_png_to_multi(
                     bytes,
                     LIGHT_SURFACE_INK,
                     AlphaMap::Curve(LIGHT_SURFACE_ALPHA_CURVE),
@@ -61,7 +62,7 @@ impl LiquidGlassCache {
         let fallback = textures
             .get(&FileTypeIcon::File)
             .cloned()
-            .unwrap_or_else(create_dummy_texture);
+            .unwrap_or_else(|| Arc::new(MultiResIcon::from_single(create_dummy_texture())));
 
         Self {
             textures,
@@ -71,11 +72,17 @@ impl LiquidGlassCache {
     }
 
     #[inline]
-    pub(crate) fn texture_for(&self, icon: FileTypeIcon) -> Arc<RenderImage> {
+    pub(crate) fn multi_for(&self, icon: FileTypeIcon) -> Arc<MultiResIcon> {
         self.textures
             .get(&icon)
             .cloned()
             .unwrap_or_else(|| self.fallback.clone())
+    }
+
+    /// Largest tier; kept for callers that want a single texture.
+    #[inline]
+    pub(crate) fn texture_for(&self, icon: FileTypeIcon) -> Arc<RenderImage> {
+        self.multi_for(icon).full.clone()
     }
 
     #[inline]
@@ -90,19 +97,19 @@ impl LiquidGlassCache {
 
     /// Variant for light surfaces (darkened ink so the glass stays visible).
     #[inline]
-    pub(crate) fn texture_for_entry_on(
+    pub(crate) fn multi_for_entry_on(
         &self,
         kind: &FileKind,
         extension: Option<&str>,
         light_surface: bool,
-    ) -> Arc<RenderImage> {
+    ) -> Arc<MultiResIcon> {
         let icon_kind = file_type_icon_kind(kind, extension);
         if light_surface {
             if let Some(tex) = self.light_textures.get(&icon_kind) {
                 return tex.clone();
             }
         }
-        self.texture_for(icon_kind)
+        self.multi_for(icon_kind)
     }
 }
 
@@ -122,37 +129,59 @@ enum AlphaMap {
     Curve(f32),
 }
 
-/// Decode raw PNG bytes to an Arc<RenderImage> with straight BGRA format,
-/// scaling RGB per channel by `ink` (1.0 = original art) and remapping alpha.
-fn decode_png_to_render_image(
-    bytes: &[u8],
-    ink: [f32; 3],
-    alpha: AlphaMap,
-) -> Option<Arc<RenderImage>> {
-    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
-    let (w, h) = img.dimensions();
-    let mut raw = img.into_raw();
+/// Edge lengths of the pre-filtered tiers, matching `MultiResIcon::for_size`.
+const TIERS: [u32; 4] = [32, 64, 128, 256];
 
-    // Swap R <-> B for GPUI's straight-BGRA GPU pipeline.
-    for px in raw.chunks_exact_mut(4) {
-        px.swap(0, 2);
-        // Now BGRA, while `ink` is RGB.
-        for (c, scale) in px[..3].iter_mut().zip([ink[2], ink[1], ink[0]]) {
-            if scale < 1.0 {
-                *c = (f32::from(*c) * scale).round() as u8;
-            }
-        }
-        let a = f32::from(px[3]) / 255.0;
+/// Decode raw PNG bytes into mip tiers of straight-BGRA textures, scaling RGB per
+/// channel by `ink` (1.0 = original art) and remapping alpha.
+///
+/// The art ships at 100px. Sampling it with a single bilinear tap at 30-60px
+/// aliases (jagged, "pixelated" edges), so each tier is resampled once on the
+/// CPU with Lanczos3 in premultiplied space instead.
+fn decode_png_to_multi(bytes: &[u8], ink: [f32; 3], alpha: AlphaMap) -> Option<Arc<MultiResIcon>> {
+    let mut img = image::load_from_memory(bytes).ok()?.to_rgba8();
+
+    for px in img.pixels_mut() {
+        let [r, g, b, a] = px.0;
+        let a = f32::from(a) / 255.0;
         let a = match alpha {
             AlphaMap::Gain(gain) => a * gain,
             AlphaMap::Curve(exp) => a.powf(exp),
-        };
-        px[3] = (a * 255.0).round().clamp(0.0, 255.0) as u8;
+        }
+        .clamp(0.0, 1.0);
+        // Premultiplied RGBA so resampling never bleeds the color of transparent texels.
+        let premul = |v: u8, scale: f32| (f32::from(v) * scale.min(1.0) * a).round() as u8;
+        px.0 = [
+            premul(r, ink[0]),
+            premul(g, ink[1]),
+            premul(b, ink[2]),
+            (a * 255.0).round() as u8,
+        ];
     }
 
-    let buf = image::RgbaImage::from_raw(w, h, raw)?;
-    let frame = image::Frame::new(buf);
-    Some(Arc::new(RenderImage::new(vec![frame])))
+    let tier = |edge: u32| -> Option<Arc<RenderImage>> {
+        let mut out =
+            image::imageops::resize(&img, edge, edge, image::imageops::FilterType::Lanczos3);
+        for px in out.pixels_mut() {
+            let [r, g, b, a] = px.0;
+            px.0 = if a == 0 {
+                [0, 0, 0, 0]
+            } else {
+                let af = f32::from(a) / 255.0;
+                let un = |v: u8| (f32::from(v) / af).min(255.0).round() as u8;
+                // R<->B swap: GPUI expects straight BGRA.
+                [un(b), un(g), un(r), a]
+            };
+        }
+        Some(Arc::new(RenderImage::new(vec![image::Frame::new(out)])))
+    };
+
+    Some(Arc::new(MultiResIcon {
+        small: tier(TIERS[0])?,
+        medium: tier(TIERS[1])?,
+        large: tier(TIERS[2])?,
+        full: tier(TIERS[3])?,
+    }))
 }
 
 fn create_dummy_texture() -> Arc<RenderImage> {

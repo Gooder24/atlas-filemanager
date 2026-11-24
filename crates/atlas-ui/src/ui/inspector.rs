@@ -837,7 +837,7 @@ impl App {
     }
 
     /// Toggle the expanded (near-full-window) preview for the focused tab. Bound to
-    /// Space. Resets zoom/pan so the new size starts fitted.
+    /// Expands/collapses the preview and resets zoom/pan to fit its new size.
     pub(crate) fn toggle_preview_expanded(&mut self) {
         let tab = self.state.focused_tile;
         let v = self.preview_view.entry(tab).or_default();
@@ -2364,7 +2364,8 @@ impl App {
                                     .into_any_element(),
                                 // Cache variant follows light/dark surfaces.
                                 None => gpui::img(
-                                    self.liquid_glass_icon(&row_kind, e.extension.as_deref()),
+                                    self.liquid_glass_icon(&row_kind, e.extension.as_deref())
+                                        .for_size(14.0),
                                 )
                                 .w(px(14.))
                                 .h(px(14.))

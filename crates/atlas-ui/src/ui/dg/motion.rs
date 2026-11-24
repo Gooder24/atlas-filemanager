@@ -64,13 +64,38 @@ impl ColumnReveal {
         instant: bool,
         now: Instant,
     ) -> (f32, bool) {
-        let max = (count as f32 * col_w - viewport_w).max(0.0);
+        self.sample_layout(
+            focus,
+            count,
+            count as f32 * col_w,
+            |i| (i as f32 * col_w, col_w),
+            viewport_w,
+            offset,
+            instant,
+            now,
+        )
+    }
+
+    /// Like `sample`, for columns of differing widths: `column(i)` is the
+    /// `(left, width)` of column `i` and `total_w` the width of the whole cascade.
+    pub fn sample_layout(
+        &mut self,
+        focus: usize,
+        count: usize,
+        total_w: f32,
+        column: impl Fn(usize) -> (f32, f32),
+        viewport_w: f32,
+        offset: f32,
+        instant: bool,
+        now: Instant,
+    ) -> (f32, bool) {
+        let max = (total_w - viewport_w).max(0.0);
         let manual = (offset - self.last_applied).abs() > 0.5;
         if manual {
             self.target = offset;
             self.spring.sample(offset, true, now);
         }
-        let key = (focus, count, viewport_w.to_bits(), col_w.to_bits());
+        let key = (focus, count, viewport_w.to_bits(), total_w.to_bits());
         if self.focus != Some(key) {
             // Clicking a directory usually leaves keyboard focus on its parent
             // column. Reveal the newly appended child as well.
@@ -82,8 +107,8 @@ impl ColumnReveal {
             } else {
                 focus
             };
-            let left = revealed as f32 * col_w;
-            let right = left + col_w;
+            let (left, width) = column(revealed);
+            let right = left + width;
             self.target = if right > offset + viewport_w {
                 right - viewport_w
             } else if left < offset {

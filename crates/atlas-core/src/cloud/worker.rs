@@ -651,9 +651,11 @@ impl Worker {
                 }
             },
             Err(error) => {
-                let _ = self
-                    .bg_tx
-                    .send(BgResult::CloudError(format!("Cannot remove {id}: {error}")));
+                // The provider extension cannot start (missing, blocked by an antivirus...),
+                // so there is nothing to deconfigure: drop the account locally instead of
+                // leaving a row the user can never remove.
+                tracing::warn!(%id, %error, "cloud provider unavailable; removing the account locally");
+                let _ = self.bg_tx.send(BgResult::RemoteRemoved(id));
             }
         }
     }

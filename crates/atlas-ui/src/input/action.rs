@@ -182,6 +182,9 @@ pub enum Action {
         col: SortColumn,
         dir: SortDir,
     },
+    /// Sort the focused pane by a column; repeating it flips the direction.
+    SortBy(SortColumn),
+    ReverseSort,
     SetGroupBy(atlas_model::tab::GroupBy),
     ToggleGroup {
         tab: TabId,
@@ -229,8 +232,10 @@ pub enum Action {
     /// Release this device's license activation so the key can move to another PC.
     DeactivateLicense,
     /// Reveal the crash-report folder (newest report selected when there is one).
+    #[cfg(windows)]
     OpenCrashReports,
     /// Upload the previous session's crash report (text only, paths redacted).
+    #[cfg(windows)]
     SendCrashReport,
     /// Open the Premium purchase options.
     GetPremium,

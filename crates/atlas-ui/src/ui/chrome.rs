@@ -104,7 +104,18 @@ impl App {
         header_bg: Hsla,
         cx: &gpui::App,
     ) -> AnyElement {
-        let body = self.render_crumb_strip_body(pane_id, view, fg, muted, border, header_bg);
+        // Same treatment as Ember on every theme: a barely-there strip and one
+        // faint hairline. Glass views pass a transparent border, so read the
+        // theme's own hairline (already translucent on Glass). No extra tinted
+        // slab behind the strip on Glass, so it never reads as a separate band.
+        let _ = border;
+        let border = cx.theme().border;
+        let wrapper_bg = if self.state.profiles.active().theme.ends_with(" Glass") {
+            gpui::transparent_black()
+        } else {
+            header_bg
+        };
+        let body = self.render_crumb_strip_body(pane_id, view, fg, muted, border);
         let commands = self.pinned_header_commands(cx);
         let loading =
             self.state.tab_states.get(&pane_id).is_some_and(|state| {
@@ -170,7 +181,7 @@ impl App {
             .w_full()
             .min_w(px(0.0))
             .items_center()
-            .bg(header_bg)
+            .bg(wrapper_bg)
             .child(div().flex_1().min_w(px(0.0)).child(body))
             .child(
                 div()
@@ -190,7 +201,6 @@ impl App {
         fg: Hsla,
         muted: Hsla,
         border: Hsla,
-        header_bg: Hsla,
     ) -> AnyElement {
         let pane_archive_inner = self.tab_data_for(pane_id).and_then(|t| {
             t.location
@@ -215,7 +225,6 @@ impl App {
             .unwrap_or_default();
         let active_theme = self.state.profiles.active().theme.as_str();
         let windows_theme = is_windows_theme(active_theme);
-        let is_glass = active_theme.ends_with(" Glass");
         let is_branch_view = self.tab_data_for(pane_id).is_some_and(|t| t.is_branch_view);
         let button_hover = control_hover(fg);
 
@@ -239,11 +248,7 @@ impl App {
                 } else {
                     false
                 };
-                let strip_bg = if is_glass {
-                    header_bg
-                } else {
-                    border.opacity(0.03)
-                };
+                let strip_bg = border.opacity(0.03);
                 return crate::ui::chrome_dg::DgChromeElement::new(
                     pane_id,
                     view.downgrade(),
@@ -252,8 +257,9 @@ impl App {
                     can_forward,
                     up_location.is_some(),
                     is_bookmarked,
+                    self.preview_visible_for_focused(),
                     windows_theme,
-                    is_glass,
+                    false,
                     fg,
                     muted,
                     strip_bg,
@@ -327,11 +333,7 @@ impl App {
                     .into_any_element(),
             })
         };
-        let strip_bg = if is_glass {
-            header_bg
-        } else {
-            border.opacity(0.03)
-        };
+        let strip_bg = border.opacity(0.03);
         let finder_view = view.clone();
         h_flex()
             .w_full()
@@ -341,9 +343,8 @@ impl App {
             .gap(crate::ui::rem_px(if windows_theme { 9.0 } else { 6.0 }))
             .items_center()
             .bg(strip_bg)
-            .when(!is_glass, |s| {
-                s.border_b_1().border_color(border.opacity(0.45))
-            })
+            .border_b_1()
+            .border_color(border.opacity(0.45))
             .when(!windows_theme, |s| s.text_sm())
             .when(windows_theme, |s| s.text_base())
             .text_color(muted)

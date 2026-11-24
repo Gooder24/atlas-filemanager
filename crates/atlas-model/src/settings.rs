@@ -132,6 +132,9 @@ pub struct Settings {
     /// Background opacity for Glass themes (0.20 to 1.00, default 0.80).
     #[serde(default = "default_glass_opacity")]
     pub glass_opacity: f32,
+    /// `#rrggbb` accent applied on top of whichever theme is active; `None` keeps
+    /// the theme's own accent.
+    pub accent_override: Option<String>,
     /// Element spacing / gap in grid view (points, default 16.0).
     #[serde(default = "default_grid_spacing")]
     pub grid_spacing: f32,
@@ -215,7 +218,7 @@ impl Settings {
         if self.scroll_overscroll.is_finite() {
             self.scroll_overscroll.clamp(0.0, 0.9)
         } else {
-            0.4
+            0.0
         }
     }
     pub fn single_click_opens_folder(&self, is_dir: bool, clicks: usize, modified: bool) -> bool {
@@ -265,7 +268,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             single_click_folders_only: false,
-            scroll_overscroll: 0.4,
+            scroll_overscroll: 0.0,
             character_key_action: CharacterKeyAction::TypeInFilter,
             icon_style: IconStyle::Auto,
             filter_sticky: false,
@@ -291,6 +294,7 @@ impl Default for Settings {
             autosave_session: true,
             dim_inactive_panes: false,
             glass_opacity: default_glass_opacity(),
+            accent_override: None,
             grid_spacing: default_grid_spacing(),
             getting_started_seen: false,
             vim_mode: false,
@@ -303,15 +307,15 @@ impl Default for Settings {
 mod tests {
     use super::*;
     #[test]
-    fn scroll_margin_defaults_to_forty_percent_and_rejects_invalid_extents() {
+    fn scroll_margin_defaults_to_zero_and_rejects_invalid_extents() {
         let mut settings: Settings = serde_json::from_str("{}").unwrap();
-        assert_eq!(settings.scroll_overscroll_fraction(), 0.4);
+        assert_eq!(settings.scroll_overscroll_fraction(), 0.0);
         for (value, expected) in [
             (-1.0, 0.0),
             (0.0, 0.0),
             (0.4, 0.4),
             (5.0, 0.9),
-            (f32::NAN, 0.4),
+            (f32::NAN, 0.0),
         ] {
             settings.scroll_overscroll = value;
             assert_eq!(settings.scroll_overscroll_fraction(), expected);

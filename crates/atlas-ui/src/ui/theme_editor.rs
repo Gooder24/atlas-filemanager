@@ -91,6 +91,57 @@ fn theme_set(config: &ThemeConfig) -> ThemeSet {
 }
 
 impl App {
+    pub(crate) fn theme_color_picker_open(&self, cx: &gpui::App) -> bool {
+        self.theme_editor.as_ref().is_some_and(|editor| {
+            editor
+                .controls
+                .iter()
+                .any(|(_, control)| control.read(cx).is_open())
+        })
+    }
+
+    /// Picker for the accent override applied on top of the current theme.
+    pub(crate) fn ensure_accent_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let color = self
+            .state
+            .settings
+            .accent_override
+            .as_deref()
+            .and_then(|hex| Hsla::parse_hex(hex).ok())
+            .unwrap_or(cx.theme().primary);
+        if let Some((picker, _)) = &self.accent_picker {
+            picker.update(cx, |state, cx| state.set_value(color, window, cx));
+            return;
+        }
+        let animate = !self.state.settings.disable_animations;
+        let picker = cx.new(|cx| {
+            ColorPickerState::new(window, cx)
+                .default_value(color)
+                .default_angular()
+                .angular_animation(animate)
+        });
+        let subscription = cx.subscribe(&picker, |this, _, event: &ColorPickerEvent, cx| {
+            if let ColorPickerEvent::Change(Some(color)) = event {
+                this.state.settings.accent_override = Some(color.to_hex());
+                this.theme_dirty = true;
+                this.save();
+                this.notify_all_panes(cx);
+                cx.notify();
+            }
+        });
+        self.accent_picker = Some((picker, subscription));
+    }
+
+    fn reset_accent_override(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.state.settings.accent_override = None;
+        self.theme_dirty = true;
+        self.save();
+        self.notify_all_panes(cx);
+        self.accent_picker = None;
+        self.ensure_accent_picker(window, cx);
+        cx.notify();
+    }
+
     pub(crate) fn fork_active_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let registry = ThemeRegistry::global(cx);
         let Some(base) = registry
@@ -382,6 +433,55 @@ impl App {
             content = content.child(div().text_sm().text_color(danger).child(error.clone()));
         }
         let Some(editor) = &self.theme_editor else {
+            if let Some((picker, _)) = &self.accent_picker {
+                let overridden = self.state.settings.accent_override.is_some();
+                let hex = picker
+                    .read(cx)
+                    .value()
+                    .map(|value| value.to_hex())
+                    .unwrap_or_default();
+                content = content.child(
+                    h_flex()
+                        .w_full()
+                        .h(rem_px(52.))
+                        .px(rem_px(10.))
+                        .gap(rem_px(12.))
+                        .items_center()
+                        .rounded(rem_px(8.))
+                        .child(
+                            div()
+                                .size(rem_px(30.))
+                                .flex_shrink_0()
+                                .rounded(rem_px(8.))
+                                .border_1()
+                                .border_color(fg.opacity(0.15))
+                                .bg(primary),
+                        )
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(fg)
+                                        .child(rust_i18n::t!("theme_color_accent").to_string()),
+                                )
+                                .child(div().text_xs().text_color(muted).child(hex.clone())),
+                        )
+                        .when(overridden, |row| {
+                            row.child(
+                                Button::new("reset-accent")
+                                    .small()
+                                    .ghost()
+                                    .label(rust_i18n::t!("theme_accent_reset").to_string())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.reset_accent_override(window, cx)
+                                    })),
+                            )
+                        })
+                        .child(ColorPicker::new(picker).small().label(hex)),
+                );
+            }
             return content.into_any_element();
         };
 

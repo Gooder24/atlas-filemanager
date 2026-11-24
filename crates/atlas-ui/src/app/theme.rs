@@ -166,6 +166,34 @@ fn apply_translucent_solid_material(colors: &mut ThemeColor, opacity: f32) {
     }
 }
 
+/// Recolour the accent family of the active theme; text on top flips to
+/// black/white so any picked colour stays legible.
+fn apply_accent_override(colors: &mut gpui_component::ThemeColor, accent: gpui::Hsla) {
+    let hue = accent.hue.into_positive_degrees() / 360.0;
+    let lightness = accent.lightness;
+    let on_accent = if lightness > 0.6 {
+        gpui::hsla(0.0, 0.0, 0.05, 1.0)
+    } else {
+        gpui::hsla(0.0, 0.0, 1.0, 1.0)
+    };
+    let shift = |delta: f32| {
+        gpui::hsla(
+            hue,
+            accent.saturation,
+            (lightness + delta).clamp(0.0, 1.0),
+            1.0,
+        )
+    };
+    let accent = shift(0.0);
+    colors.accent = accent;
+    colors.accent_foreground = on_accent;
+    colors.primary = accent;
+    colors.primary_foreground = on_accent;
+    colors.primary_hover = shift(if lightness > 0.5 { -0.05 } else { 0.05 });
+    colors.primary_active = shift(if lightness > 0.5 { -0.1 } else { -0.08 });
+    colors.ring = accent;
+}
+
 const SOLID_CANVAS_BASE: f32 = 0.45;
 const SOLID_CANVAS_SCALE: f32 = 0.45;
 const SOLID_PANE_BASE: f32 = 0.22;
@@ -269,6 +297,15 @@ impl App {
                 config.mode,
                 self.state.settings.glass_opacity,
             );
+        }
+        if let Some(accent) = self
+            .state
+            .settings
+            .accent_override
+            .as_deref()
+            .and_then(|hex| <gpui::Hsla as gpui_component::Colorize>::parse_hex(hex).ok())
+        {
+            apply_accent_override(&mut Theme::global_mut(cx).colors, accent);
         }
         // Re-apply zoom so Root's per-frame set_rem_size(theme.font_size) picks up
         // the user's scale instead of the theme default (px(16.)).

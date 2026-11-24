@@ -3,6 +3,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -58,6 +59,20 @@ class ReleaseMetadataTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 repository.verify_assets(output)
 
+    def test_private_beta_points_to_its_run_without_claiming_a_public_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "CHANGELOG.md").write_text("## [1.0.0-rc.1] - 2026-01-01\n\n- Fix preview\n")
+            env = dict(ATLAS_CANDIDATE_URL="https://github.com/owner/repo/actions/runs/123",
+                       GITHUB_SHA="a" * 40, ATLAS_EDITION="free")
+            with patch.object(release, "ROOT", root), patch.dict(os.environ, env):
+                info = release.metadata("1.0.0-rc.1", "owner/repo", root / "output")
+            self.assertEqual(info["distribution"], "beta-test")
+            self.assertEqual(info["edition"], "free")
+            self.assertEqual(info["revision"], "a" * 40)
+            tree = ET.parse(root / "output" / (release.APP_ID + ".metainfo.xml"))
+            self.assertEqual(tree.findtext("releases/release/url"), env["ATLAS_CANDIDATE_URL"])
+
     def test_stable_repository_rejects_prereleases_before_signing(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -72,20 +87,35 @@ class ReleaseMetadataTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "must be empty"):
                 release.packages("1.0.0", "owner/repo", output / "binary", output, output, output)
 
+    def test_binaries_without_debug_info_are_packaged_unchanged(self):
+        # The repack workflow feeds back binaries an earlier run already split.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "main.c"
+            source.write_text("int main(void) { return 0; }\n")
+            binary = root / "atlas"
+            subprocess.run(["cc", "-g", "-o", binary, source], check=True)
+            [first] = release.split_debug_info([binary], root / "first")
+            [second] = release.split_debug_info([first], root / "second")
+            self.assertEqual(second.read_bytes(), first.read_bytes())
+            self.assertEqual(list((root / "second" / "debug").iterdir()), [])
+
     def test_distributable_payload_includes_extensions_and_notices(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             binaries = root / "release"
             binaries.mkdir()
-            for name in ("atlas", "atlas-search-service", "atlas-cloud-extension", "atlas-icon-extension"):
-                binary = binaries / name
-                binary.write_bytes(b"built executable")
-                binary.chmod(0o755)
+            # A real ELF with DWARF, like the release profile's line tables.
+            source = root / "main.c"
+            source.write_text("int main(void) { return 0; }\n")
+            subprocess.run(["cc", "-g", "-o", binaries / "atlas", source], check=True)
+            for name in ("atlas-search-service", "atlas-cloud-extension", "atlas-icon-extension"):
+                shutil.copy2(binaries / "atlas", binaries / name)
             output = root / "dist"
 
             def packaging_tool(*args, **kwargs):
                 args = [str(arg) for arg in args]
-                if args[0] == 'rsvg-convert':
+                if args[0] in ('rsvg-convert', 'objcopy'):
                     subprocess.run(args, check=True)
                 elif "--target" in args:
                     Path(args[args.index("--target") + 1]).write_bytes(b"native package")
@@ -99,6 +129,15 @@ class ReleaseMetadataTests(unittest.TestCase):
                 for name in ("atlas", "atlas-search-service", "atlas-cloud-extension", "atlas-icon-extension"):
                     member = archive.getmember(f"atlas-0.1.5-linux-x86_64/bin/{name}")
                     self.assertTrue(member.mode & 0o111, name)
+                    shipped = root / "shipped"
+                    shipped.write_bytes(archive.extractfile(member).read())
+                    sections = subprocess.run(["readelf", "-S", "-W", shipped], check=True,
+                                              capture_output=True, text=True).stdout
+                    self.assertNotIn(".debug_info", sections, name)
+                    self.assertIn(".gnu_debuglink", sections, name)
+                    debug = root / "data" / "debug" / f"{name}.debug"
+                    self.assertIn(".debug_info", subprocess.run(["readelf", "-S", "-W", debug], check=True,
+                                                                capture_output=True, text=True).stdout)
                 notice = archive.extractfile("atlas-0.1.5-linux-x86_64/share/doc/atlas/THIRD-PARTY-NOTICES.txt")
                 self.assertEqual(notice.read(), (release.ROOT / "legal/THIRD-PARTY-NOTICES.txt").read_bytes())
                 logo = archive.extractfile("atlas-0.1.5-linux-x86_64/share/icons/hicolor/512x512/apps/atlas.png")

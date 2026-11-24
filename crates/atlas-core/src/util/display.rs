@@ -52,59 +52,11 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
+/// Formats a timestamp as `YYYY-MM-DD HH:MM` in the user's local time zone.
 pub fn format_date(t: SystemTime) -> String {
-    use std::time::UNIX_EPOCH;
-    let secs = t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-    let (y, mo, d, h, mi) = unix_to_ymdhm(secs);
-    format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}")
-}
-
-fn unix_to_ymdhm(secs: u64) -> (u32, u32, u32, u32, u32) {
-    // Simple calendar calculation (no external dep)
-    let mut days = (secs / 86400) as u32;
-    let time_of_day = (secs % 86400) as u32;
-    let h = time_of_day / 3600;
-    let mi = (time_of_day % 3600) / 60;
-
-    let mut year = 1970u32;
-    loop {
-        let days_in_year = if is_leap(year) { 366 } else { 365 };
-        if days < days_in_year {
-            break;
-        }
-        days -= days_in_year;
-        year += 1;
-    }
-
-    let leap = is_leap(year);
-    let month_days: [u32; 12] = [
-        31,
-        if leap { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let mut month = 1u32;
-    for &md in &month_days {
-        if days < md {
-            break;
-        }
-        days -= md;
-        month += 1;
-    }
-
-    (year, month, days + 1, h, mi)
-}
-
-const fn is_leap(y: u32) -> bool {
-    y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400))
+    chrono::DateTime::<chrono::Local>::from(t)
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
 }
 
 /// Check if a path is hidden (name starts with '.').

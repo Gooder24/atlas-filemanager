@@ -70,11 +70,22 @@ def metadata(version, repo, output):
     repository(repo)
     output.mkdir(parents=True, exist_ok=True)
     date, notes = release_notes((ROOT / "CHANGELOG.md").read_text(), version)
-    release_url = f"https://github.com/{repo}/releases/tag/v{version}"
+    candidate_url = os.environ.get("ATLAS_CANDIDATE_URL", "")
+    if candidate_url and not re.fullmatch(r"https://github\.com/[^/\s]+/[^/\s]+/actions/runs/[0-9]+", candidate_url):
+        raise ValueError("Candidate URL must point to a GitHub Actions run")
+    release_url = candidate_url or f"https://github.com/{repo}/releases/tag/v{version}"
     data = dict(version=version, date=date, notes=notes, repository=repo,
-                release_url=release_url, prerelease="-" in version)
+                release_url=release_url, prerelease="-" in version,
+                distribution="beta-test" if candidate_url else "release",
+                revision=os.environ.get("GITHUB_SHA", ""),
+                edition=os.environ.get("ATLAS_EDITION", "full"))
     (output / "release.json").write_text(json.dumps(data, indent=2) + "\n")
     (output / "release-notes.md").write_text(notes + "\n")
+    source_url = os.environ.get("ATLAS_SOURCE_URL") or f"https://github.com/{repo}"
+    (output / "SOURCE-CODE.txt").write_text(
+        f"Atlas {version} — corresponding source\nRevision: {data['revision']}\n"
+        f"Edition: {data['edition']}\nSource: {source_url}\n"
+        "Keep the matching source ZIP with this beta distribution.\n", encoding="utf-8")
     component = ET.Element("component", type="desktop-application")
     for name, text in [("id", APP_ID), ("name", "Atlas"),
                        ("summary", "Manage files with multiple panes and fast keyboard navigation"),
@@ -131,6 +142,41 @@ def write_checksums(output):
         (output / (path.name + ".sha256")).write_text(f"{sha256(path)}  {path.name}\n")
 
 
+def has_debug_info(binary):
+    sections = subprocess.run(["readelf", "-S", "-W", str(binary)], check=True,
+                              capture_output=True, text=True).stdout
+    return ".debug_info" in sections
+
+
+def split_debug_info(binaries, data_dir):
+    """Return stripped copies of `binaries`; their DWARF goes to data_dir/debug.
+
+    The release profile keeps line tables for crash stacks. On Windows they go to a
+    separate PDB; on Linux they stay inside the ELF and made /usr/bin/atlas four times
+    larger. The symbol table stays, so panic backtraces still name functions, and each
+    copy gets a .gnu_debuglink, so gdb finds NAME.debug next to it or at
+    /usr/lib/debug/usr/bin/NAME.debug. A binary without DWARF (a repacked candidate
+    that was already split) is copied as is.
+    """
+    stripped_dir, debug_dir = data_dir / "stripped", data_dir / "debug"
+    for directory in (stripped_dir, debug_dir):
+        shutil.rmtree(directory, ignore_errors=True)
+        directory.mkdir(parents=True)
+    stripped = []
+    for binary in binaries:
+        target = stripped_dir / binary.name
+        if not has_debug_info(binary):
+            shutil.copy2(binary, target)
+            stripped.append(target)
+            continue
+        debug = debug_dir / (binary.name + ".debug")
+        run("objcopy", "--only-keep-debug", "--compress-debug-sections", binary, debug)
+        run("objcopy", "--strip-debug", f"--add-gnu-debuglink={debug}", binary, target)
+        shutil.copymode(binary, target)
+        stripped.append(target)
+    return stripped
+
+
 def packages(version, repo, binary, output, tool_dir, data_dir):
     if output.exists() and any(output.iterdir()):
         raise ValueError("Package output must be empty; use a fresh --output directory")
@@ -150,6 +196,7 @@ def packages(version, repo, binary, output, tool_dir, data_dir):
     for companion in companions:
         if not companion.is_file():
             raise FileNotFoundError(f"Missing built companion: {companion}")
+    binary, *companions = split_debug_info([binary, *companions], data_dir)
     env = dict(os.environ, ATLAS_VERSION=version, ATLAS_BINARY=str(binary),
                ATLAS_BINARY_DIR=str(binary.parent), ATLAS_PACKAGE_DATA=str(data_dir))
     # nFPM expands some metadata fields, but not content source paths.
@@ -175,6 +222,7 @@ def packages(version, repo, binary, output, tool_dir, data_dir):
         ROOT / "CHANGELOG.md": "share/doc/atlas/CHANGELOG.md",
         ROOT / "LICENSE": "share/licenses/atlas/LICENSE",
         ROOT / "legal/THIRD-PARTY-NOTICES.txt": "share/doc/atlas/THIRD-PARTY-NOTICES.txt",
+        data_dir / "SOURCE-CODE.txt": "share/doc/atlas/SOURCE-CODE.txt",
     }
     destinations.update({companion: f"bin/{companion.name}" for companion in companions})
     for source, relative in destinations.items():
@@ -189,7 +237,10 @@ def packages(version, repo, binary, output, tool_dir, data_dir):
     shutil.copytree(stage, appdir / "usr")
     env.update(APPIMAGE_EXTRACT_AND_RUN="1", ARCH="x86_64", OUTPUT=f"Atlas-{version}-x86_64.AppImage")
     owner, project = repo.split("/")
-    env["UPDATE_INFORMATION"] = f"gh-releases-zsync|{owner}|{project}|latest|Atlas-*-x86_64.AppImage.zsync"
+    if info["distribution"] == "release":
+        env["UPDATE_INFORMATION"] = f"gh-releases-zsync|{owner}|{project}|latest|Atlas-*-x86_64.AppImage.zsync"
+    else:
+        env.pop("UPDATE_INFORMATION", None)
     # Dependencies are collected by linuxdeploy; it intentionally excludes glibc.
     run(tool_dir / "linuxdeploy", "--appdir", appdir, "--executable", binary,
         "--desktop-file", ROOT / "packaging/linux/atlas.desktop", "--icon-file", icon,
@@ -199,6 +250,8 @@ def packages(version, repo, binary, output, tool_dir, data_dir):
     aur.mkdir(exist_ok=True)
     pkgver = version.replace("-", "_")
     dependencies = ["glibc", "gcc-libs", "openssl", "libxkbcommon", "libxkbcommon-x11", "libxcb", "fontconfig", "wayland", "vulkan-icd-loader", "libglvnd", "ttf-dejavu"]
+    recipe_source = (tarball.name if info["distribution"] == "beta-test" else
+                     f"{info['release_url'].replace('/tag/', '/download/')}/{tarball.name}")
     # This recipe only unpacks a pinned, checksummed upstream artifact.
     recipe = f'''# Maintained upstream; generated for Atlas {version}.
 pkgname=atlas-bin
@@ -212,7 +265,7 @@ depends=({' '.join(repr(d) for d in dependencies)})
 provides=('atlas')
 conflicts=('atlas')
 options=('!strip')
-source=('{info["release_url"].replace("/tag/", "/download/")}/{tarball.name}')
+source=('{recipe_source}')
 sha256sums=('{sha256(tarball)}')
 package() {{
     for binary in atlas atlas-search-service atlas-cloud-extension atlas-icon-extension; do
@@ -225,7 +278,7 @@ package() {{
     (aur / "PKGBUILD").write_text(recipe)
     srcinfo = ["pkgbase = atlas-bin", f"\tpkgdesc = Modern file manager built with Rust and GPUI", f"\tpkgver = {pkgver}", "\tpkgrel = 1", "\turl = https://atlasnative.com", "\tarch = x86_64", "\tlicense = AGPL-3.0-or-later"]
     srcinfo.extend(f"\tdepends = {d}" for d in dependencies)
-    srcinfo.extend(["\tprovides = atlas", "\tconflicts = atlas", "\toptions = !strip", f"\tsource = {info['release_url'].replace('/tag/', '/download/')}/{tarball.name}", f"\tsha256sums = {sha256(tarball)}", "", "pkgname = atlas-bin"])
+    srcinfo.extend(["\tprovides = atlas", "\tconflicts = atlas", "\toptions = !strip", f"\tsource = {recipe_source}", f"\tsha256sums = {sha256(tarball)}", "", "pkgname = atlas-bin"])
     (aur / ".SRCINFO").write_text("\n".join(srcinfo) + "\n")
     with tarfile.open(output / f"atlas-{version}-aur.tar.gz", "w:gz") as archive:
         archive.add(aur, arcname="atlas-bin")

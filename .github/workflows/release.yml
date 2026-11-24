@@ -59,6 +59,8 @@ jobs:
     uses: ./.github/workflows/linux-packages.yml
     with:
       version: ${{ needs.metadata.outputs.version }}
+      edition: free
+      source-url: https://github.com/${{ github.repository }}/releases/download/v${{ needs.metadata.outputs.version }}/atlas-${{ needs.metadata.outputs.version }}-source.zip
 
   publish:
     name: Publish verified GitHub release
@@ -72,8 +74,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
-      # Windows updates are distributed through Microsoft Store. Keep Windows
-      # installers/MSIX in the workflow for maintainer testing and submission.
+      # The Store MSIX is submitted by hand; the direct-download installer ships with the release.
       - uses: actions/download-artifact@v4
         with:
           pattern: atlas-linux-*
@@ -83,6 +84,12 @@ jobs:
         with:
           name: atlas-source
           path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: atlas-windows-installer-x86_64
+          path: windows-installer
+      - name: Add the Windows installer to the release files
+        run: cp windows-installer/AtlasSetup-*.exe dist/
       - name: Final checksums and release notes
         run: |
           python3 scripts/linux_release.py metadata --version "$ATLAS_VERSION"
@@ -94,6 +101,12 @@ jobs:
           write_checksums(Path('dist'))
           PY
           (cd dist && sha256sum --check SHA256SUMS)
+      - name: Render winget, AUR and Flatpak manifests from the published files
+        run: python3 scripts/render_package_manifests.py --version "$ATLAS_VERSION" --dist dist --output target/package-manifests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-manifests
+          path: target/package-manifests
       - name: Create and publish a draft after all Linux checks pass
         run: |
           flags=()
@@ -110,10 +123,35 @@ jobs:
           fi
           gh release upload "$ATLAS_TAG" dist/* --clobber
           gh release edit "$ATLAS_TAG" --draft=false --notes-file target/linux-release/release-notes.md "${flags[@]}"
+      - name: Publish to AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          ATLAS_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "No AUR_SSH_PRIVATE_KEY secret configured; skipping AUR publish."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519,rsa aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes"
+          git clone ssh://aur@aur.archlinux.org/atlas-filemanager-bin.git /tmp/aur-repo
+          cp target/package-manifests/linux/aur/PKGBUILD target/package-manifests/linux/aur/.SRCINFO /tmp/aur-repo/
+          cd /tmp/aur-repo
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR is already up to date."
+            exit 0
+          fi
+          git -c user.name="${{ github.repository_owner }}" -c user.email="${{ github.repository_owner }}@users.noreply.github.com" \
+            commit -m "Update to $ATLAS_VERSION"
+          git push origin HEAD:master
 
   repositories:
     needs: [metadata, publish]
-    if: ${{ vars.ATLAS_LINUX_REPOSITORIES_ENABLED == 'true' && needs.metadata.outputs.prerelease == 'false' }}
+    if: ${{ vars.ATLAS_LINUX_REPOSITORIES_ENABLED == 'true' }}
     uses: ./.github/workflows/linux-repositories.yml
     with:
       tag: ${{ needs.metadata.outputs.tag }}

@@ -146,7 +146,7 @@ impl App {
         if let Some(multi) = self.multi_res_icon_for_entry(kind, extension) {
             return FileIcon::IconTexture(IconTexture::Multi(multi));
         }
-        FileIcon::IconTexture(IconTexture::Single(self.liquid_glass_icon(kind, extension)))
+        FileIcon::IconTexture(IconTexture::Multi(self.liquid_glass_icon(kind, extension)))
     }
 
     pub(crate) fn file_icon_for_entry(

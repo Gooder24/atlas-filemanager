@@ -31,18 +31,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Ensure this is the latest stable release
+      - name: Ensure release is published and not draft
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ATLAS_TAG: ${{ inputs.tag }}
         run: |
-          gh release view --json tagName,isPrerelease,isDraft > /tmp/atlas-latest.json
+          gh release view "$ATLAS_TAG" --json tagName,isPrerelease,isDraft > /tmp/atlas-latest.json
           python3 - <<'PY'
           import json, os
           release = json.load(open('/tmp/atlas-latest.json'))
-          if release['tagName'] != os.environ['ATLAS_TAG'] or release['isDraft'] or release['isPrerelease']:
-              raise SystemExit('Only the latest stable release can update the stable repositories')
+          if release['tagName'] != os.environ['ATLAS_TAG'] or release['isDraft']:
+              raise SystemExit('Only published non-draft releases can update the repositories')
           PY
       - name: Download the release and retain recent package versions
         env:
@@ -89,6 +89,7 @@ jobs:
           ATLAS_GPG_PASSPHRASE: ${{ secrets.ATLAS_LINUX_SIGNING_PASSPHRASE }}
           REPOSITORY_URL: ${{ vars.ATLAS_LINUX_REPOSITORY_URL }}
           SIGNING_FINGERPRINT: ${{ vars.ATLAS_LINUX_SIGNING_FINGERPRINT }}
+          ATLAS_ALLOW_PRERELEASE: '1'
         run: |
           if [ -z "$REPOSITORY_URL" ]; then
             REPOSITORY_URL="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}"
