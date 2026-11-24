@@ -46,16 +46,17 @@ fn icon_scale() -> f32 {
 }
 
 impl MultiResIcon {
-    /// Pick the closest resolution tier for the target *logical* pixel edge; the
-    /// window DPI scale converts it to physical pixels so HiDPI picks a sharper tier.
+    /// Pick a supersampled resolution tier for the target *logical* pixel edge;
+    /// the window DPI scale converts it to physical pixels and keeping at least
+    /// ~1.33× headroom keeps SVG/raster silhouettes sharp without upscaling blur.
     #[inline]
     pub fn for_size(&self, px: f32) -> Arc<RenderImage> {
         let px = px * icon_scale();
-        if px <= 32.0 {
+        if px <= 24.0 {
             self.small.clone()
-        } else if px <= 64.0 {
+        } else if px <= 48.0 {
             self.medium.clone()
-        } else if px <= 128.0 {
+        } else if px <= 96.0 {
             self.large.clone()
         } else {
             self.full.clone()

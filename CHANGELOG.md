@@ -5,6 +5,15 @@ Write user-facing release notes here. Release headings use
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-24
+
+### Fixed
+
+- Changing the custom accent color now also updates the sidebar active highlight and ink, list/table active selection, links, and drag targets with dark/light contrast adjustments.
+- File and folder icons in Grid view render sharper without dark edge fringes (smooth Catmull-Rom resampling + straight-edge color bleed for built-in icons and supersampled tier selection for SVG icon themes).
+- Windows Store (MSIX): Win+E integration now uses `uap5:StartupTask` with `uap10:Parameters` and falls back cleanly to a session shortcut helper when Windows policy reports `DisabledByPolicy`, so Win+E works immediately without rebooting.
+- Windows Store (MSIX): taskbar icons now consistently use the dark-navy rounded Atlas brand icon on both dark and light taskbars.
+
 ## [0.1.6] - 2026-11-24
 
 ### Fixed

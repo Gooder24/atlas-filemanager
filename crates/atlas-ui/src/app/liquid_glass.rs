@@ -135,44 +135,59 @@ const TIERS: [u32; 4] = [32, 64, 128, 256];
 /// Decode raw PNG bytes into mip tiers of straight-BGRA textures, scaling RGB per
 /// channel by `ink` (1.0 = original art) and remapping alpha.
 ///
-/// The art ships at 100px. Sampling it with a single bilinear tap at 30-60px
-/// aliases (jagged, "pixelated" edges), so each tier is resampled once on the
-/// CPU with Lanczos3 in premultiplied space instead.
+/// Resamples the original premultiplied art first with CatmullRom (avoiding
+/// Lanczos3 ringing halos and avoiding magnifying post-curve stepped alpha),
+/// then applies the ink/alpha curve and edge color bleed so GPU bilinear
+/// sampling produces clean, fringe-free rounded silhouettes.
 fn decode_png_to_multi(bytes: &[u8], ink: [f32; 3], alpha: AlphaMap) -> Option<Arc<MultiResIcon>> {
     let mut img = image::load_from_memory(bytes).ok()?.to_rgba8();
 
+    // Premultiply original alpha before resampling so transparent pixels never bleed.
     for px in img.pixels_mut() {
         let [r, g, b, a] = px.0;
-        let a = f32::from(a) / 255.0;
-        let a = match alpha {
-            AlphaMap::Gain(gain) => a * gain,
-            AlphaMap::Curve(exp) => a.powf(exp),
-        }
-        .clamp(0.0, 1.0);
-        // Premultiplied RGBA so resampling never bleeds the color of transparent texels.
-        let premul = |v: u8, scale: f32| (f32::from(v) * scale.min(1.0) * a).round() as u8;
+        let af = f32::from(a) / 255.0;
         px.0 = [
-            premul(r, ink[0]),
-            premul(g, ink[1]),
-            premul(b, ink[2]),
-            (a * 255.0).round() as u8,
+            (f32::from(r) * af).round() as u8,
+            (f32::from(g) * af).round() as u8,
+            (f32::from(b) * af).round() as u8,
+            a,
         ];
     }
 
     let tier = |edge: u32| -> Option<Arc<RenderImage>> {
-        let mut out =
-            image::imageops::resize(&img, edge, edge, image::imageops::FilterType::Lanczos3);
-        for px in out.pixels_mut() {
-            let [r, g, b, a] = px.0;
-            px.0 = if a == 0 {
-                [0, 0, 0, 0]
-            } else {
-                let af = f32::from(a) / 255.0;
-                let un = |v: u8| (f32::from(v) / af).min(255.0).round() as u8;
-                // R<->B swap: GPUI expects straight BGRA.
-                [un(b), un(g), un(r), a]
+        let resized =
+            image::imageops::resize(&img, edge, edge, image::imageops::FilterType::CatmullRom);
+        let mut raw = resized.into_raw();
+        for px in raw.chunks_exact_mut(4) {
+            let [pr, pg, pb, pa] = [px[0], px[1], px[2], px[3]];
+            if pa == 0 {
+                px.copy_from_slice(&[0, 0, 0, 0]);
+                continue;
+            }
+            let src_a = f32::from(pa) / 255.0;
+            let un = |v: u8, scale: f32| {
+                ((f32::from(v) / src_a) * scale.min(1.0))
+                    .clamp(0.0, 255.0)
+                    .round() as u8
             };
+            let out_a = match alpha {
+                AlphaMap::Gain(gain) => src_a * gain,
+                AlphaMap::Curve(exp) => src_a.powf(exp),
+            }
+            .clamp(0.0, 1.0);
+            let out_a_u8 = (out_a * 255.0).round() as u8;
+            if out_a_u8 == 0 {
+                px.copy_from_slice(&[0, 0, 0, 0]);
+            } else {
+                // R<->B swap: GPUI expects straight BGRA.
+                px[0] = un(pb, ink[2]);
+                px[1] = un(pg, ink[1]);
+                px[2] = un(pr, ink[0]);
+                px[3] = out_a_u8;
+            }
         }
+        super::icon_loader::bleed_straight_edges(&mut raw, edge as usize);
+        let out = image::RgbaImage::from_raw(edge, edge, raw)?;
         Some(Arc::new(RenderImage::new(vec![image::Frame::new(out)])))
     };
 

@@ -166,9 +166,14 @@ fn apply_translucent_solid_material(colors: &mut ThemeColor, opacity: f32) {
     }
 }
 
-/// Recolour the accent family of the active theme; text on top flips to
-/// black/white so any picked colour stays legible.
-fn apply_accent_override(colors: &mut gpui_component::ThemeColor, accent: gpui::Hsla) {
+/// Recolour the accent family of the active theme (including sidebar, selection,
+/// list/table active highlights, links, and drag targets); text on top flips to
+/// black/white or adjusts lightness so any picked colour stays legible.
+fn apply_accent_override(
+    colors: &mut gpui_component::ThemeColor,
+    mode: ThemeMode,
+    accent: gpui::Hsla,
+) {
     let hue = accent.hue.into_positive_degrees() / 360.0;
     let lightness = accent.lightness;
     let on_accent = if lightness > 0.6 {
@@ -185,13 +190,43 @@ fn apply_accent_override(colors: &mut gpui_component::ThemeColor, accent: gpui::
         )
     };
     let accent = shift(0.0);
+    let hover = shift(if lightness > 0.5 { -0.05 } else { 0.05 });
+    let active = shift(if lightness > 0.5 { -0.1 } else { -0.08 });
+    // Sidebar active rows and links sit on a translucent tint of the accent
+    // over the canvas, so clamp ink lightness for readable contrast on dark/light.
+    let tinted_ink = gpui::hsla(
+        hue,
+        accent.saturation,
+        if mode.is_dark() {
+            lightness.max(0.62)
+        } else {
+            lightness.min(0.45)
+        },
+        1.0,
+    );
+    let soft_tint = material_color(accent, if mode.is_dark() { 0.16 } else { 0.11 });
+
     colors.accent = accent;
     colors.accent_foreground = on_accent;
     colors.primary = accent;
     colors.primary_foreground = on_accent;
-    colors.primary_hover = shift(if lightness > 0.5 { -0.05 } else { 0.05 });
-    colors.primary_active = shift(if lightness > 0.5 { -0.1 } else { -0.08 });
+    colors.primary_hover = hover;
+    colors.primary_active = active;
     colors.ring = accent;
+    colors.sidebar_accent = soft_tint;
+    colors.sidebar_accent_foreground = tinted_ink;
+    colors.sidebar_primary = accent;
+    colors.sidebar_primary_foreground = on_accent;
+    colors.selection = material_color(accent, 0.20);
+    colors.list_active = material_color(accent, if mode.is_dark() { 0.14 } else { 0.10 });
+    colors.list_active_border = accent;
+    colors.table_active = colors.list_active;
+    colors.table_active_border = accent;
+    colors.link = tinted_ink;
+    colors.link_hover = hover;
+    colors.link_active = active;
+    colors.drop_target = material_color(accent, 0.12);
+    colors.drag_border = accent;
 }
 
 const SOLID_CANVAS_BASE: f32 = 0.45;
@@ -305,7 +340,7 @@ impl App {
             .as_deref()
             .and_then(|hex| <gpui::Hsla as gpui_component::Colorize>::parse_hex(hex).ok())
         {
-            apply_accent_override(&mut Theme::global_mut(cx).colors, accent);
+            apply_accent_override(&mut Theme::global_mut(cx).colors, config.mode, accent);
         }
         // Re-apply zoom so Root's per-frame set_rem_size(theme.font_size) picks up
         // the user's scale instead of the theme default (px(16.)).
@@ -744,5 +779,29 @@ mod gpui_ce_tests {
                 .expect("hex syntax color");
         let value = serde_json::to_value(config).unwrap();
         assert_eq!(value["syntax"]["comment"]["color"], "#0413FCAA");
+    }
+
+    #[test]
+    fn accent_override_updates_sidebar_and_selection_tokens() {
+        use super::apply_accent_override;
+        let orange = gpui::Hsla::parse_hex("#F97316").unwrap();
+        let orange_hue = orange.hue.into_positive_degrees();
+
+        for mode in [gpui_component::ThemeMode::Light, gpui_component::ThemeMode::Dark] {
+            let mut colors = gpui_component::ThemeColor::default();
+            apply_accent_override(&mut colors, mode, orange);
+            assert!((colors.accent.hue.into_positive_degrees() - orange_hue).abs() < 1.0);
+            assert!((colors.sidebar_accent.hue.into_positive_degrees() - orange_hue).abs() < 1.0);
+            assert!(
+                (colors.sidebar_accent_foreground.hue.into_positive_degrees() - orange_hue).abs()
+                    < 1.0
+            );
+            assert!((colors.sidebar_primary.hue.into_positive_degrees() - orange_hue).abs() < 1.0);
+            assert!((colors.list_active.hue.into_positive_degrees() - orange_hue).abs() < 1.0);
+            assert!((colors.table_active.hue.into_positive_degrees() - orange_hue).abs() < 1.0);
+            assert!((colors.selection.hue.into_positive_degrees() - orange_hue).abs() < 1.0);
+            assert!((colors.link.hue.into_positive_degrees() - orange_hue).abs() < 1.0);
+            assert!(colors.sidebar_accent.alpha > 0.05 && colors.sidebar_accent.alpha < 0.25);
+        }
     }
 }

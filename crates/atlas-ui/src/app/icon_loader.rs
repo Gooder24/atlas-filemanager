@@ -129,7 +129,7 @@ impl App {
 /// non-transparent orthogonal neighbors (preserving alpha = 0), the GPU filtered color remains
 /// constant while only alpha transitions smoothly. Outer pixels (like corner (0,0)) remain
 /// clean (0, 0, 0, 0).
-fn bleed_straight_edges(raw: &mut [u8], side: usize) {
+pub(super) fn bleed_straight_edges(raw: &mut [u8], side: usize) {
     let copy = raw.to_vec();
     for y in 0..side {
         for x in 0..side {

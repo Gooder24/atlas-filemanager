@@ -224,12 +224,13 @@ try {
         Save-ResizedAsset -SourceImage $source -TargetWidth $w -TargetHeight $h -DestinationPath (Join-Path $assets.FullName $k)
     }
 
-    # 5. Taskbar Unplated variants (Crucial for modern Windows 10/11 taskbar!)
+    # 5. Taskbar Unplated variants: use the dark-navy rounded Atlas icon everywhere
+    # so both dark and light Windows 10/11 taskbars match the Start/Store brand icon.
     $unplatedSizes = @(16, 24, 32, 48, 256)
     foreach ($sz in $unplatedSizes) {
-        Save-ResizedAsset -SourceImage $sourceUnplated -TargetWidth $sz -TargetHeight $sz `
+        Save-ResizedAsset -SourceImage $source -TargetWidth $sz -TargetHeight $sz `
             -DestinationPath (Join-Path $assets.FullName "Square44x44Logo.altform-unplated_targetsize-$sz.png")
-        Save-ResizedAsset -SourceImage $sourceLightUnplated -TargetWidth $sz -TargetHeight $sz `
+        Save-ResizedAsset -SourceImage $source -TargetWidth $sz -TargetHeight $sz `
             -DestinationPath (Join-Path $assets.FullName "Square44x44Logo.altform-lightunplated_targetsize-$sz.png")
     }
 } finally {

@@ -172,9 +172,15 @@ fn stop_helper_process() {
 /// Read packaged Win+E status from the MSIX `StartupTask` and keep the
 /// background helper synchronized (e.g. restarting it after a Store update or
 /// stopping it if the user disabled the startup task in Windows Settings).
+/// When Windows policy blocks `StartupTask` (`DisabledByPolicy`), fall back to
+/// reporting whether the session shortcut helper is actively running.
 pub(super) fn packaged_win_e_enabled() -> io::Result<bool> {
-    let enabled = is_state_enabled(query_startup_task_state()?);
+    let state = query_startup_task_state()?;
     let running = find_helper_window() != 0;
+    if state == StartupTaskState::DisabledByPolicy {
+        return Ok(running);
+    }
+    let enabled = is_state_enabled(state);
     if enabled && !running {
         let _ = spawn_helper_process();
     } else if !enabled && running {
@@ -189,6 +195,8 @@ pub(super) fn packaged_win_e_enabled() -> io::Result<bool> {
 }
 
 /// Enable or disable the packaged Win+E shortcut helper via `StartupTask`.
+/// If Windows policy disables packaged startup tasks (`DisabledByPolicy`),
+/// still start/stop the session shortcut helper so `Win+E` works immediately.
 pub(super) fn set_packaged_win_e_enabled(enabled: bool) -> io::Result<()> {
     if enabled {
         let state = run_on_mta(|| {
@@ -206,18 +214,15 @@ pub(super) fn set_packaged_win_e_enabled(enabled: bool) -> io::Result<()> {
                 Ok(current)
             }
         })?;
-        match state {
-            StartupTaskState::Enabled | StartupTaskState::EnabledByPolicy => {}
+        let rollback_startup_task = match state {
+            StartupTaskState::Enabled | StartupTaskState::EnabledByPolicy => true,
+            // Policy-restricted or tweaked Windows PCs block StartupTask registration;
+            // still run the helper for the current session so Win+E works immediately.
+            StartupTaskState::DisabledByPolicy => false,
             StartupTaskState::DisabledByUser => {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     "Atlas Win+E startup task is disabled in Windows Settings -> Apps -> Startup",
-                ));
-            }
-            StartupTaskState::DisabledByPolicy => {
-                return Err(io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    "Atlas Win+E startup task is disabled by Windows policy",
                 ));
             }
             _ => {
@@ -225,14 +230,18 @@ pub(super) fn set_packaged_win_e_enabled(enabled: bool) -> io::Result<()> {
                     "Could not enable the Atlas Win+E startup task",
                 ));
             }
-        }
+        };
         if find_helper_window() == 0 {
             if let Err(error) = spawn_helper_process() {
-                let _ = disable_startup_task();
+                if rollback_startup_task {
+                    let _ = disable_startup_task();
+                }
                 return Err(error);
             }
             if !wait_for_helper_state(true, HELPER_SYNC_TIMEOUT) {
-                let _ = disable_startup_task();
+                if rollback_startup_task {
+                    let _ = disable_startup_task();
+                }
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
                     "Atlas Win+E shortcut helper did not start in time",
@@ -241,7 +250,7 @@ pub(super) fn set_packaged_win_e_enabled(enabled: bool) -> io::Result<()> {
         }
         Ok(())
     } else {
-        disable_startup_task()?;
+        let _ = disable_startup_task();
         stop_helper_process();
         Ok(())
     }
@@ -456,9 +465,13 @@ pub(super) fn run_helper() {
     if !super::is_packaged() {
         return;
     }
-    // Respect Windows Settings / Task Manager if the user disabled the task.
-    if !query_startup_task_state().is_ok_and(is_state_enabled) {
-        return;
+    // Respect Windows Settings / Task Manager if the user explicitly disabled the task.
+    // Allow running when `DisabledByPolicy` because the user explicitly opted in for
+    // the current session from Atlas Settings.
+    if let Ok(state) = query_startup_task_state() {
+        if state == StartupTaskState::Disabled || state == StartupTaskState::DisabledByUser {
+            return;
+        }
     }
     let mutex_name = wide(MUTEX_NAME);
     let mutex = unsafe { CreateMutexW(null(), 0, mutex_name.as_ptr()) };
